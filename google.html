@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>تقرير أداء Google Ads</title>
+<style>
+/* ── تشخيص الإعلانات داخل الحملات ─────────────────────────────────
+   شجرة <details> لأنها تعمل بلا جافاسكربت: التقرير يُرسَل ويُطبع
+   ويُفتح بلا إنترنت، فأي طيٍّ يعتمد على JS يكسر إحدى هذه الحالات. */
+.dx{display:flex; flex-direction:column; gap:10px}
+.dx-camp{border:1px solid var(--grid); border-radius:10px;
+         background:var(--surface); overflow:hidden}
+.dx-camp[open]{border-color:var(--axis)}
+.dx-head{display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+         padding:11px 14px; cursor:pointer; list-style:none;
+         font-size:14px; user-select:none}
+.dx-head::-webkit-details-marker{display:none}
+.dx-head::before{content:"▸"; color:var(--ink-muted); font-size:12px;
+                 transition:transform .15s}
+.dx-camp[open] .dx-head::before{transform:rotate(90deg)}
+.dx-head:hover{background:rgba(127,127,127,.05)}
+.dx-name{font-weight:600; flex:1 1 220px}
+.dx-nums{color:var(--ink-2); font-size:12.5px;
+         font-variant-numeric:tabular-nums}
+.dx-ads{display:flex; flex-direction:column; gap:1px;
+        background:var(--grid); border-top:1px solid var(--grid)}
+.dx-ad{display:flex; gap:14px; padding:14px; background:var(--surface)}
+.dx-media{flex:0 0 auto}
+.dx-body{flex:1 1 auto; min-width:0}
+.dx-title{font-weight:600; font-size:13.5px; display:flex;
+          align-items:center; gap:8px; flex-wrap:wrap}
+.dx-sub{color:var(--ink-2); font-size:12px; margin:2px 0 9px;
+        font-variant-numeric:tabular-nums}
+
+.dx-row{display:grid; grid-template-columns:62px 62px 1fr 150px;
+        align-items:center; gap:8px; font-size:12px; padding:1.5px 0;
+        font-variant-numeric:tabular-nums}
+.dx-stage{color:var(--ink-2)}
+.dx-val{text-align:left; direction:ltr; unicode-bidi:isolate}
+.dx-bar{position:relative; height:7px; border-radius:4px;
+        background:var(--grid); overflow:visible}
+.dx-bar.dx-base{background:var(--axis)}
+.dx-fill{position:absolute; inset-block:0; inset-inline-start:0;
+         border-radius:4px; display:block}
+.dx-fill.good{background:var(--good)}
+.dx-fill.neutral{background:var(--series)}
+.dx-fill.warning{background:var(--warning)}
+.dx-fill.critical{background:var(--critical)}
+.dx-fill.unknown{background:var(--axis)}
+/* علامة الوسيط عند منتصف الشريط — لأن سقفه ضعف الوسيط */
+.dx-med{position:absolute; inset-inline-start:50%; top:-3px; bottom:-3px;
+        width:2px; background:var(--ink); opacity:.45}
+.dx-note{font-size:11.5px; color:var(--ink-2)}
+.dx-note.good{color:var(--good)}
+.dx-note.warning{color:var(--serious)}
+.dx-note.critical{color:var(--critical)}
+.dx-none{color:var(--ink-muted)}
+.dx-arrow{font-size:9.5px; letter-spacing:-1px}
+.dx-vs{color:var(--ink-muted); font-size:11px}
+.dx-row{grid-template-columns:62px 62px 1fr 168px}
+.dx-ret{font-size:12px; color:var(--ink-2); margin-top:7px}
+.dx-ranks{display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+          margin-top:8px; font-size:11.5px}
+.dx-ranks-lab{color:var(--ink-muted)}
+.dx-rank{padding:2px 8px; border-radius:20px; border:1px solid var(--grid);
+         color:var(--ink-2); white-space:nowrap}
+.dx-rank.good{border-color:var(--good); color:var(--good)}
+.dx-rank.warning{border-color:var(--warning)}
+.dx-rank.serious{border-color:var(--serious); color:var(--serious)}
+.dx-rank.critical{border-color:var(--critical); color:var(--critical)}
+.dx-rank-say{color:var(--ink-2)}
+.sc-plat{display:flex; align-items:center; gap:8px; margin:22px 0 10px;
+         font-size:15px}
+.sc-cols{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin:14px 0}
+.sc-cols h3{font-size:13.5px; margin:0 0 6px}
+.sc-cols ol{margin:0; padding-inline-start:20px; font-size:12.5px;
+            line-height:1.75}
+.sc-cols li{margin-bottom:7px}
+.sc-act{margin:8px 0 0; padding-inline-start:20px; font-size:12.5px;
+        line-height:1.8}
+.sc-act li{margin-bottom:8px}
+@media (max-width:720px){ .sc-cols{grid-template-columns:1fr} }
+.dx-say{font-size:12.5px; line-height:1.65; margin:9px 0 0;
+        padding:8px 11px; border-radius:8px;
+        background:rgba(127,127,127,.07);
+        border-inline-start:2px solid var(--axis)}
+@media (max-width:640px){
+  .dx-ad{flex-direction:column}
+  .dx-row{grid-template-columns:54px 54px 1fr; }
+  .dx-row .dx-note{grid-column:1/-1; padding-inline-start:116px}
+}
+
+:root{
+  color-scheme: light;
+  --page:#f9f9f7; --surface:#fcfcfb;
+  --ink:#0b0b0b; --ink-2:#52514e; --ink-muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,.10);
+  --series:#2a78d6; --series-low:#9ec5f4;
+  --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19;
+    --ink:#fff; --ink-2:#c3c2b7; --ink-muted:#898781;
+    --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
+    --series:#3987e5; --series-low:#1c5cab;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --page:#0d0d0d; --surface:#1a1a19;
+  --ink:#fff; --ink-2:#c3c2b7; --ink-muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,.10);
+  --series:#3987e5; --series-low:#1c5cab;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; padding:24px 16px 64px;
+  background:var(--page); color:var(--ink);
+  font-family:system-ui,"Segoe UI",Tahoma,Arial,sans-serif;
+  font-size:15px; line-height:1.6;
+}
+.wrap{max-width:1100px; margin:0 auto}
+
+header.top{margin-bottom:24px}
+h1{font-size:24px; margin:0 0 6px; font-weight:600}
+.meta{color:var(--ink-2); font-size:13px}
+.meta b{color:var(--ink); font-weight:600}
+
+.hero{
+  background:var(--surface); border:1px solid var(--ring); border-radius:12px;
+  padding:24px; margin:0 0 12px; text-align:center;
+}
+.hero-label{color:var(--ink-2); font-size:14px}
+.hero-gauge{position:relative; width:min(300px,88vw); margin:6px auto 2px}
+.hero-value{position:absolute; inset-inline:0; bottom:6px;
+  font-size:52px; font-weight:600; line-height:1}
+.hero-meta{display:flex; gap:12px; align-items:center; justify-content:center;
+  flex-wrap:wrap; margin-top:10px}
+.hero-note{color:var(--ink-muted); font-size:13px}
+
+/* ---- قوس القياس: مسار خطوة أفتح + تعبئة بشدّة الحالة ---- */
+.gauge{display:block; width:100%; height:auto; overflow:visible}
+.g-track{fill:none; stroke:var(--grid); stroke-width:9; stroke-linecap:round}
+.g-fill{fill:none; stroke:var(--sev); stroke-width:9; stroke-linecap:round}
+.g-tick{stroke:var(--axis); stroke-width:1}
+.g-tick-label,.g-end{fill:var(--ink-muted); font-size:9px;
+  font-family:system-ui,"Segoe UI",sans-serif; direction:ltr}
+
+/* ---- مؤشر خطّي مضغوط للقيَم داخل الجداول ---- */
+.metric{display:inline-flex; align-items:center; gap:8px; white-space:nowrap}
+.metric-num{font-variant-numeric:tabular-nums; min-width:34px;
+  color:var(--ink); text-align:start}
+.meter-track{position:relative; flex:0 0 auto; width:58px; height:6px;
+  border-radius:3px; background:var(--grid);
+  background:color-mix(in oklab, var(--sev) 22%, transparent)}
+.meter-fill{position:absolute; inset-block:0; inset-inline-start:0;
+  background:var(--sev);
+  border-start-end-radius:3px; border-end-end-radius:3px}
+.meter-tick{position:absolute; top:-2px; bottom:-2px; width:1px;
+  background:var(--ink-muted)}
+.tile-extra{margin:6px 0 2px}
+.tile-extra .meter-track{width:100%}
+.tile-extra .metric{display:flex}
+
+/* أربع بطاقات في الصف بالضبط — لا auto-fit. الملء التلقائي كان يضع
+   خمسًا أو ثلاثًا حسب عرض الشاشة، فتنكسر المجموعتان المقصودتان:
+   النتيجة في حاوية، والوصول في حاوية. */
+.tiles{display:grid; gap:10px; grid-template-columns:repeat(4,1fr)}
+@media (max-width:900px){.tiles{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:520px){.tiles{grid-template-columns:1fr}}
+
+/* الحاوية: صينيّة تحمل البطاقات فتقرأ الأربع ككتلة واحدة.
+   خلفيتها أغمق قليلًا من البطاقة نفسها ليظهر التجميع بلا حدّ ثقيل. */
+.tile-tray{background:color-mix(in oklab,var(--grid) 42%,var(--page));
+  border:1px solid var(--ring); border-radius:16px; padding:10px}
+.tile-tray + .tile-tray{margin-top:10px}
+.tile-tray:last-of-type{margin-bottom:12px}
+.tile{background:var(--surface); border:1px solid var(--ring);
+  border-radius:12px; padding:16px}
+.tile-label{color:var(--ink-2); font-size:13px}
+.tile-value{font-size:28px; font-weight:600; line-height:1.2; margin-top:2px;
+  font-variant-numeric:tabular-nums}
+.tile-sub{color:var(--ink-muted); font-size:12px; line-height:1.55}
+
+/* ---- لافتة الحملة: هويّة الكتلة قبل أرقامها ---- */
+tr.camp td{background:color-mix(in oklab,var(--ink) 9%,var(--surface));
+  border-top:2px solid var(--ink-muted); padding:12px 10px}
+.camp-name{font-weight:700; font-size:14.5px}
+.camp-meta{color:var(--ink-2); font-size:12px; margin-inline-start:12px;
+  font-variant-numeric:tabular-nums}
+.camp-roas{margin-inline-start:12px}
+/* أول لافتة لا تحتاج فاصلًا علويًا — رأس الجدول يسبقها */
+tbody tr.camp:first-child td{border-top:none}
+
+/* ---- صف الحملة: إجمالياتها في نفس أعمدة إعلاناتها ---- */
+tr.grp td{background:color-mix(in oklab,var(--ink) 6%,var(--surface));
+  border-top:2px solid var(--ring); border-bottom:1px solid var(--ring);
+  padding:11px 10px; font-weight:600;
+  font-variant-numeric:tabular-nums}
+.grp-name{font-weight:600; font-size:13.5px}
+.grp-sub{color:var(--ink-2); font-size:11.5px; font-weight:400; margin-top:2px}
+.grp-icon{color:var(--ink-muted); font-size:14px}
+/* الإعلانات تحت الحملة تُزاح ليُقرأ التداخل بصريًا */
+tr.grp ~ tr td:nth-child(2){padding-inline-start:22px}
+
+/* أسماء الأعمدة المتكرّرة فوق كل حملة — أخفت من رأس الجدول
+   لأنها تذكير لا عنوان جديد، فلا تنافس أرقام الحملة على الانتباه */
+tr.colhead td{background:transparent; color:var(--ink-muted);
+  font-size:11px; font-weight:600; letter-spacing:.02em;
+  padding:14px 10px 4px; border-bottom:1px solid var(--grid);
+  white-space:nowrap}
+tr.colhead + tr.grp td{border-top:none}
+
+.card{background:var(--surface); border:1px solid var(--ring);
+  border-radius:12px; padding:20px; margin-bottom:12px}
+.card h3{margin:0 0 4px; font-size:17px; font-weight:600;
+  display:flex; align-items:center; gap:8px}
+.card-sub{margin:0 0 16px; color:var(--ink-2); font-size:13px}
+.count{background:var(--grid); color:var(--ink-2); border-radius:20px;
+  padding:1px 9px; font-size:12px; font-weight:500}
+.empty{color:var(--ink-muted); font-size:14px; margin:0}
+
+/* ---- الرسوم: لون واحد، طرف مستدير 4px، عمود ≤24px ---- */
+.chart{display:flex; flex-direction:column; gap:8px; padding-top:14px}
+.bar-row{display:grid; grid-template-columns:minmax(90px,190px) 1fr;
+  gap:12px; align-items:center}
+.bar-label{color:var(--ink-2); font-size:13px; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap}
+.bar-track{position:relative; display:flex; align-items:center;
+  height:22px; background:linear-gradient(var(--grid),var(--grid)) no-repeat
+  bottom/100% 1px; outline-offset:3px}
+.bar-fill{height:18px; background:var(--series);
+  border-start-end-radius:4px; border-end-end-radius:4px;
+  transition:filter .12s}
+.bar-low{background:var(--series-low)}
+.bar-track:hover .bar-fill,.bar-track:focus-visible .bar-fill{filter:brightness(1.08)}
+.bar-value{font-size:13px; color:var(--ink-2); margin-inline-start:8px;
+  font-variant-numeric:tabular-nums; white-space:nowrap}
+.ref-line{position:absolute; top:-2px; bottom:-2px; width:1px;
+  background:var(--axis); pointer-events:none}
+.ref-label{position:absolute; top:-15px; inset-inline-start:4px;
+  font-size:10px; color:var(--ink-muted); white-space:nowrap}
+.axis{display:flex; justify-content:space-between; margin-top:10px;
+  padding-top:6px; border-top:1px solid var(--grid);
+  color:var(--ink-muted); font-size:11px; font-variant-numeric:tabular-nums}
+
+/* ---- خط الاتجاه اليومي ---- */
+/* direction:ltr داخل الرسم فقط: الزمن يُقرأ يسارًا←يمينًا في كل رسم بياني،
+   وعكسه مع اتجاه الصفحة يقلب معنى الصعود والهبوط. */
+.spark-wrap{direction:ltr; overflow-x:auto}
+.spark{width:100%; min-width:420px; height:auto; display:block}
+.spark-area{fill:var(--series); opacity:.10}
+.spark-line{fill:none; stroke:var(--series); stroke-width:2;
+  stroke-linejoin:round; stroke-linecap:round}
+.spark-spend{fill:var(--axis); opacity:.35}
+.spark-dot{fill:var(--surface); stroke:var(--series); stroke-width:1.8;
+  cursor:help}
+.spark-dot.dot-low{stroke:var(--critical)}
+.spark-be{stroke:var(--critical); stroke-width:1; stroke-dasharray:5 4;
+  opacity:.75}
+.spark-be-label{fill:var(--critical); font-size:10px; opacity:.9}
+.spark-x,.spark-y{fill:var(--ink-muted); font-size:10px;
+  font-variant-numeric:tabular-nums}
+.spark-y{text-anchor:end}
+.card-note{margin:10px 0 0; color:var(--ink-2); font-size:12.5px;
+  line-height:1.7}
+
+/* ---- الجداول ---- */
+.table-wrap{overflow-x:auto}
+table{width:100%; border-collapse:collapse; font-size:13.5px}
+th,td{text-align:start; padding:9px 10px; border-bottom:1px solid var(--grid);
+  vertical-align:middle}
+th{color:var(--ink-2); font-weight:600; font-size:12.5px; white-space:nowrap;
+  position:sticky; top:0; background:var(--surface)}
+td{font-variant-numeric:tabular-nums}
+td:first-child{font-variant-numeric:normal; max-width:320px}
+tbody tr:hover{background:var(--page)}
+tbody tr:last-child td{border-bottom:none}
+
+/* ---- شريط التنقّل بين المنصات ---- */
+.nav{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px}
+.nav-chip{display:inline-flex; align-items:center; gap:7px;
+  padding:8px 14px; border-radius:999px; text-decoration:none;
+  background:var(--surface); border:1px solid var(--ring);
+  color:var(--ink-2); font-size:13.5px; font-weight:600;
+  transition:border-color .12s, color .12s}
+.nav-chip:hover{border-color:var(--ink-muted); color:var(--ink)}
+.nav-chip:focus-visible{outline:2px solid var(--series); outline-offset:2px}
+/* المنصة النشطة: حدّ سميك ونص داكن — لا اللون وحده يحمل الحالة */
+.nav-chip.on{border-color:var(--ink); color:var(--ink); border-width:2px;
+  padding:7px 13px}
+.nav-dot{width:10px; height:10px; border-radius:50%; flex:none}
+
+/* ---- الشارات: أيقونة + نص + لون (لا لون وحده) ---- */
+.badge{display:inline-flex; align-items:center; gap:5px; white-space:nowrap;
+  font-size:12.5px; color:var(--ink-2)}
+.badge-icon{font-size:11px; line-height:1}
+.b-good .badge-icon{color:var(--good)}
+.b-warning .badge-icon{color:var(--warning)}
+.b-serious .badge-icon{color:var(--serious)}
+.b-critical .badge-icon{color:var(--critical)}
+.b-neutral .badge-icon{color:var(--ink-muted)}
+
+/* ---- التلميح ---- */
+#tip{position:fixed; z-index:99; pointer-events:none; opacity:0;
+  transition:opacity .1s; background:var(--ink); color:var(--surface);
+  padding:6px 10px; border-radius:6px; font-size:12.5px; max-width:320px;
+  box-shadow:0 4px 14px rgba(0,0,0,.18)}
+#tip.on{opacity:1}
+
+.media-wrap{position:relative; width:56px; height:56px}
+.thumb{width:56px; height:56px; object-fit:cover; border-radius:8px;
+  border:1px solid var(--ring); display:block; background:var(--grid)}
+.thumb-none{display:grid; place-items:center; background:var(--grid);
+  color:var(--ink-muted); font-size:12px; width:56px; height:56px;
+  border-radius:8px}
+.media-wrap video.thumb{cursor:pointer; transition:transform .12s}
+.media-wrap:hover video.thumb{transform:scale(1.06)}
+.play-badge{position:absolute; inset-block-end:2px; inset-inline-end:2px;
+  width:16px; height:16px; border-radius:50%; background:rgba(0,0,0,.62);
+  color:#fff; font-size:8px; display:grid; place-items:center;
+  pointer-events:none; transition:opacity .12s}
+.media-wrap:hover .play-badge{opacity:0}
+.play-badge.dim{opacity:.45}
+/* شعار المنصة: زاوية المعاينة العليا. حدٌّ بلون السطح يفصله عن الصورة
+   مهما كان لونها، فلا يذوب الأصفر في خلفية فاتحة. */
+.pmark{position:absolute; inset-block-start:-5px; inset-inline-start:-5px;
+  width:17px; height:17px; border-radius:50%; display:grid;
+  place-items:center; border:1.5px solid var(--surface);
+  box-shadow:0 1px 3px rgba(0,0,0,.3); pointer-events:none}
+.pmark svg{width:11px; height:11px; display:block}
+
+/* ---- REXO Chat: محادثة عائمة ----
+   في أسفل الجهة البادئة (يسار في العربية) — بعيدًا عن #tip الذي
+   يظهر عند التأشير، فلا يتراكبان. */
+.sr-only{position:absolute; width:1px; height:1px; overflow:hidden;
+  clip:rect(0 0 0 0); white-space:nowrap}
+.rc{position:fixed; inset-block-end:20px; inset-inline-start:20px; z-index:80}
+.rc-launch{width:56px; height:56px; border-radius:50%; border:0;
+  background:var(--ink); color:var(--surface); cursor:pointer;
+  display:grid; place-items:center; position:relative;
+  box-shadow:0 6px 20px rgba(0,0,0,.28); transition:transform .14s}
+.rc-launch:hover{transform:scale(1.06)}
+.rc-launch:focus-visible{outline:2px solid var(--series); outline-offset:3px}
+.rc-launch svg{width:26px; height:26px}
+.rc-dot{position:absolute; inset-block-start:3px; inset-inline-end:3px;
+  width:11px; height:11px; border-radius:50%; background:#e2241f;
+  border:2px solid var(--ink)}
+.rc.on .rc-dot{display:none}
+
+.rc-panel{position:absolute; inset-block-end:70px; inset-inline-start:0;
+  width:min(400px, calc(100vw - 40px)); max-height:min(620px, 78vh);
+  display:flex; flex-direction:column; overflow:hidden;
+  background:var(--surface); border:1px solid var(--ring);
+  border-radius:16px; box-shadow:0 14px 44px rgba(0,0,0,.3)}
+.rc-panel[hidden]{display:none}
+.rc-head{display:flex; align-items:center; gap:10px; padding:13px 14px;
+  border-bottom:1px solid var(--ring); background:var(--page)}
+.rc-mark{width:32px; height:32px; border-radius:9px; background:#18181a;
+  display:grid; place-items:center; flex:none}
+.rc-mark svg{width:20px; height:20px}
+.rc-title{display:flex; flex-direction:column; line-height:1.35; flex:1}
+.rc-title b{font-size:14px}
+.rc-title span{font-size:11.5px; color:var(--ink-muted)}
+.rc-x{border:0; background:none; color:var(--ink-muted); cursor:pointer;
+  font-size:15px; padding:4px 6px; border-radius:6px}
+.rc-x:hover{color:var(--ink); background:var(--grid)}
+
+.rc-log{flex:1; overflow-y:auto; padding:14px; display:flex;
+  flex-direction:column; gap:10px; scroll-behavior:smooth}
+.rc-msg{max-width:86%; padding:10px 13px; border-radius:14px;
+  font-size:13.5px; line-height:1.7}
+/* في العربية تُحاذى رسائلك إلى اليسار وردود الطرف الآخر إلى اليمين —
+   عكس الإنجليزية. flex-end في RTL هو اليسار. */
+.rc-me{align-self:flex-end; background:var(--ink); color:var(--surface);
+  border-end-end-radius:5px}
+.rc-bot{align-self:flex-start; background:var(--page);
+  border:1px solid var(--ring); border-end-start-radius:5px}
+/* التواريخ والأرقام الإنجليزية داخل نصّ عربي تنقلب ترتيبًا بلا عزل:
+   «(2026-07-01 ← 2026-07-31)» كانت تُعرض مبعثرة الأقواس. */
+.ltr{unicode-bidi:isolate; direction:ltr; display:inline-block}
+
+/* مبدّل الوضع */
+.rc-modes{display:flex; gap:6px; padding:9px 14px 0}
+.rc-mode{flex:1; padding:7px 10px; border-radius:9px; cursor:pointer;
+  border:1px solid var(--ring); background:var(--page); color:var(--ink-2);
+  font:inherit; font-size:12.5px; font-weight:600}
+.rc-mode.on{background:var(--ink); color:var(--surface);
+  border-color:var(--ink)}
+
+/* شاشة المفتاح */
+.rc-key{padding:14px; border-block-end:1px solid var(--ring)}
+.rc-key[hidden]{display:none}
+.rc-key-t{font-weight:700; font-size:13.5px; margin-bottom:6px}
+.rc-key-p{color:var(--ink-muted); font-size:11.5px; line-height:1.7;
+  margin:0 0 9px}
+.rc-key-p b{color:var(--ink-2)}
+.rc-warn-t{color:var(--warning)}
+.rc-key input{width:100%; padding:9px 12px; border-radius:9px;
+  border:1px solid var(--ring); background:var(--surface); color:var(--ink);
+  font:inherit; font-size:13px; direction:ltr; text-align:left}
+.rc-key-row{display:flex; gap:6px; margin:8px 0}
+.rc-key select{flex:1; min-width:0; padding:9px; border-radius:9px;
+  border:1px solid var(--ring); background:var(--surface); color:var(--ink);
+  font:inherit; font-size:12.5px}
+.rc-key-row button{padding:9px 18px; border-radius:9px; border:0;
+  background:var(--ink); color:var(--surface); font:inherit;
+  font-weight:600; cursor:pointer}
+.rc-link{border:0; background:none; color:var(--ink-muted); cursor:pointer;
+  font:inherit; font-size:12px; text-decoration:underline; padding:0}
+.rc-think{opacity:.6}
+
+.rc-chips{display:flex; flex-wrap:wrap; gap:6px; padding:0 14px 10px}
+.rc-chips[hidden]{display:none}
+.rc-chips .chip{padding:6px 11px; border-radius:999px; cursor:pointer;
+  border:1px solid var(--ring); background:var(--page); color:var(--ink-2);
+  font:inherit; font-size:12px}
+.rc-chips .chip:hover{border-color:var(--ink-muted); color:var(--ink)}
+
+.rc-bar{display:flex; gap:8px; padding:11px 12px;
+  border-top:1px solid var(--ring); background:var(--page)}
+.rc-bar input{flex:1; min-width:0; padding:10px 13px; border-radius:999px;
+  border:1px solid var(--ring); background:var(--surface); color:var(--ink);
+  font:inherit; font-size:13.5px}
+.rc-bar input:focus{outline:2px solid var(--ink-muted); outline-offset:1px}
+.rc-bar button{width:40px; height:40px; flex:none; border:0; cursor:pointer;
+  border-radius:50%; background:var(--ink); color:var(--surface);
+  display:grid; place-items:center}
+.rc-bar button svg{width:18px; height:18px}
+
+/* بطاقة الإجابة داخل فقاعة الردّ */
+.ask-title{font-weight:700; font-size:14.5px; margin-bottom:5px;
+  color:var(--ink)}
+.ask-body{color:var(--ink-2); font-size:13px; line-height:1.75;
+  font-variant-numeric:tabular-nums}
+.ask-body b{color:var(--ink)}
+.ask-note{color:var(--ink-muted); font-size:11.5px; margin-top:7px;
+  line-height:1.6}
+.ask-tbl{width:100%; border-collapse:collapse; margin-top:4px}
+.ask-tbl td{padding:5px 3px; border-bottom:1px solid var(--ring);
+  font-size:12.5px}
+.ask-tbl td.n{text-align:end; font-variant-numeric:tabular-nums;
+  white-space:nowrap; color:var(--ink)}
+
+@media print{.rc{display:none}}
+@media (max-width:520px){
+  .rc{inset-inline-start:12px; inset-block-end:12px}
+  .rc-panel{width:calc(100vw - 24px); max-height:74vh}
+}
+
+.warn{background:var(--surface); border:1px solid var(--ring);
+  border-inline-start:3px solid var(--warning); border-radius:12px;
+  padding:14px 18px; margin-bottom:12px; font-size:13.5px; color:var(--ink-2)}
+.warn b{color:var(--ink)}
+.attr,.note{font-size:12px; color:var(--ink-muted);
+  font-variant-numeric:normal}
+.loss{color:var(--critical); font-weight:600}
+.gain{color:var(--good); font-weight:600}
+
+footer{color:var(--ink-muted); font-size:12px; text-align:center;
+  margin-top:28px; line-height:1.8}
+
+@media print{
+  body{background:#fff; padding:0}
+  .card,.tile,.hero{break-inside:avoid; border-color:#ccc}
+  #tip{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap"><header class="top"><h1>تقرير أداء Google Ads</h1><div class="meta">الحساب <b>Google Ads</b> · الفترة <b>آخر 7 أيام (2026-08-01 ← 2026-08-07)</b> · أُنشئ <b>2026-08-08 10:36</b></div></header><nav class="nav" aria-label="التنقّل بين المنصات"><a class="nav-chip" href="index.html"><span class="nav-dot" style="background:#8b8a85" aria-hidden="true"></span>الكل</a><a class="nav-chip on" href="google.html" aria-current="page"><span class="nav-dot" style="background:#34a853" aria-hidden="true"></span>Google Ads</a><a class="nav-chip" href="meta.html"><span class="nav-dot" style="background:#0866ff" aria-hidden="true"></span>Meta</a><a class="nav-chip" href="snapchat.html"><span class="nav-dot" style="background:#f5c518" aria-hidden="true"></span>Snapchat</a></nav><div class="warn"><b>⚠️ كل أرقام هذا التقرير منسوبة للمنصات، وليست مبيعات متجرك.</b> كل منصة تنسب البيعة لنفسها، فمجموعها يتضمّن ازدواجًا — ومع ذلك يبقى أقلّ من مبيعاتك الكلية لأن جزءًا منها يأتي من زيارة مباشرة وعملاء عائدين وقنوات غير إعلانية. للحكم على ربحك الحقيقي قارن <b>مبيعات متجرك</b> بإجمالي إنفاقك على كل المنصات.</div><section class="hero"><div class="hero-label">ROAS الكلي للحساب</div><div class="hero-gauge"><svg class="gauge" viewBox="0 0 220 128" role="img" aria-label="مؤشر ROAS 3.28 من 6.0"><path d="M 190 108 A 80 80 0 0 0 30 108" class="g-track"/><path d="M 190 108 A 80 80 0 0 0 30 108" class="g-fill" style="--sev:var(--warning);stroke-dasharray:137.32 251.33"/><line x1="148.4" y1="49.5" x2="159.4" y2="32.8" class="g-tick"/><text x="165.5" y="23.6" class="g-tick-label" text-anchor="middle">1.9</text><title>تعادل 1.9</title><line x1="75.0" y1="47.4" x2="65.0" y2="30.1" class="g-tick"/><text x="59.5" y="20.5" class="g-tick-label" text-anchor="middle">4.0</text><title>هدف 4.0</title><text x="190" y="122" class="g-end" text-anchor="middle">0</text><text x="30" y="122" class="g-end" text-anchor="middle">6.0</text></svg><div class="hero-value">3.28</div></div><div class="hero-meta"><span class="badge b-warning"><span class="badge-icon" aria-hidden="true">●</span>فوق التعادل</span><span class="hero-note">التعادل 1.89 · الهدف 4.0 · هامش 52.9% من كشف المتجر</span></div></section><div class="tile-tray"><div class="tiles"><div class="tile"><div class="tile-label">عمليات الشراء</div><div class="tile-value">56</div></div><div class="tile"><div class="tile-label">قيمة المبيعات</div><div class="tile-value">8,712</div><div class="tile-sub">ريال</div></div><div class="tile"><div class="tile-label">إجمالي الصرف</div><div class="tile-value">2,658</div><div class="tile-sub">ريال</div></div><div class="tile"><div class="tile-label">ROAS</div><div class="tile-value">3.28</div><div class="tile-extra"><span class="badge b-warning"><span class="badge-icon" aria-hidden="true">●</span>فوق التعادل</span></div><div class="tile-sub">عائد كل ريال · التعادل 1.89</div></div></div></div><div class="tile-tray"><div class="tiles"><div class="tile"><div class="tile-label">الوصول</div><div class="tile-value">—</div><div class="tile-sub">لا توفّرها المنصات المتصلة</div></div><div class="tile"><div class="tile-label">الظهور</div><div class="tile-value">157,984</div><div class="tile-sub">مرة ظهر فيها إعلانك · تكلفة الألف 16.82 ريال</div></div><div class="tile"><div class="tile-label">النقرات</div><div class="tile-value">1,997</div><div class="tile-sub">1.26% من الظهور · تكلفة النقرة 1.33 ريال</div></div><div class="tile"><div class="tile-label">زيارات المتجر</div><div class="tile-value">1,997</div><div class="tile-sub">1.26% من الظهور · تكلفة الزيارة 1.33 ريال · المنصة لا تفصل نقرات الرابط عن بقية النقرات</div></div></div></div><div class="tile-tray"><div class="tiles"><div class="tile"><div class="tile-label">لم يُكملوا الشراء</div><div class="tile-value">0</div><div class="tile-extra"><span class="metric" style="--sev:var(--good)"><span class="metric-num">0%</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span></span></span></div><div class="tile-sub">بدؤوا الدفع من 32 ولم يُتمّوا · لا تشمل 269 ريال من منصات لا توفّرها</div></div><div class="tile"><div class="tile-label">قيمة ما لم يُكتمل</div><div class="tile-value"><span class="loss">0</span></div><div class="tile-sub">ريال · من 0 وصلت صفحة الدفع — أكبر فرصة ربح لا تحتاج ريالًا إعلانيًّا إضافيًّا</div></div><div class="tile"><div class="tile-label">إنفاق بلا تحويل</div><div class="tile-value">1,281</div><div class="tile-extra"><span class="metric" style="--sev:var(--critical)"><span class="metric-num">48.2%</span><span class="meter-track"><span class="meter-fill" style="width:48.21%"></span></span></span></div><div class="tile-sub">من إجمالي الإنفاق — منتجات ومصطلحات بحث</div></div><div class="tile"><div class="tile-label">صافي المبيعات المنسوبة</div><div class="tile-value"><span class="gain">+1,949</span></div><div class="tile-extra"><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>ربح</span></div><div class="tile-sub">قيمة المبيعات × هامش 52.9% − الصرف · يقيس ما تنسبه المنصات لنفسها لا مبيعات متجرك</div></div></div></div><div class="warn"><b>⚠️ لا تقارن ROAS خامًا بين المنصات.</b> كل منصة تنسب التحويلات لنفسها بنافذة مختلفة — عمود «نافذة الإسناد» أدناه. نافذة النقرة في Snapchat ‏28 يومًا مقابل 7 أيام في Meta، فيَنسب Snapchat لنفسه مشترياتٍ وقعت بعد أسابيع من النقرة بينما تتجاهلها Meta — ROAS أعلى على نفس الأداء الحقيقي. (نافذة المشاهدة متساوية: يوم واحد في كلتيهما.) المقارنة العادلة تتطلب توحيد النوافذ في إعدادات كل منصة أولًا.</div><section class="card"><h3>مقارنة المنصات <span class="count">1</span></h3><p class="card-sub">كل المبالغ موحّدة بـ SAR.</p><div class="table-wrap"><table><thead><tr><th>المنصة</th><th>الحالة</th><th>عملة الحساب</th><th>الإنفاق</th><th>القيمة</th><th>تحويلات</th><th>ROAS</th><th>نافذة الإسناد</th><th>ملاحظات</th></tr></thead><tbody><tr><td><b>Google Ads</b></td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>يعمل</span></td><td><span class="attr">SAR</span></td><td>2,658</td><td>8,712</td><td>56.2</td><td><span class="metric" style="--sev:var(--warning)"><span class="metric-num">3.28</span><span class="meter-track"><span class="meter-fill" style="width:54.64%"></span><span class="meter-tick" style="inset-inline-start:31.50%"></span></span></span></td><td><span class="attr">30 يومًا بعد النقرة</span></td><td><span class="note">—</span></td></tr></tbody></table></div></section><section class="card"><h2>سلوك الزائر — Google Analytics</h2><p class="sub"><b>68%</b> من زياراتك مدفوعة (12,583 من 18,398).<br>⚠️ وهذا أوسع قياسٍ مستقلّ عندك للإسناد: وسوم طلباتك تغطّي 20% فقط، وGA4 يرى المُحيل حتى بلا وسوم.<br>⚠️ لكنه <b>لا يقيس مبيعاتك</b> — مصدرها ملف طلبات زد، ويفقد GA4 من يحظر التتبّع فأرقامه دون الواقع دائمًا.</p><div class="tiles tile-tray"><div class="tile"><div class="tile-label">الجلسات</div><div class="tile-value">18,398</div></div><div class="tile"><div class="tile-label">المستخدمون</div><div class="tile-value">15,808</div><div class="tile-sub">13,203 جديد</div></div><div class="tile"><div class="tile-label">مشاهدات الصفحات</div><div class="tile-value">39,337</div><div class="tile-sub">2.1 لكل جلسة</div></div><div class="tile"><div class="tile-label">معدّل الارتداد</div><div class="tile-value">62.6%</div><div class="tile-sub">يغادر من أول صفحة</div></div></div><section class="card"><h3>مصادر الزيارات <span class="count">12</span></h3><p class="card-sub">المدفوع مُبرَز · وGA4 يراه بلا وسوم</p><div class="table-wrap"><table><thead><tr><th>المصدر</th><th>الجلسات</th><th>الحصّة</th><th></th></tr></thead><tbody><tr><td><span class="">سناب شات — مدفوع</span></td><td>5,348</td><td>29.1%</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:100%"></i></span></td></tr><tr><td><span class="note">مباشر — بلا مصدر</span></td><td>4,194</td><td>22.8%</td><td><span class="dx-bar"><i class="dx-fill unknown" style="width:78%"></i></span></td></tr><tr><td><span class="">تيك توك — مدفوع</span></td><td>2,812</td><td>15.3%</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:53%"></i></span></td></tr><tr><td><span class="">قوقل — مدفوع</span></td><td>1,635</td><td>8.9%</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:31%"></i></span></td></tr><tr><td><span class="">إنستغرام — مدفوع</span></td><td>1,486</td><td>8.1%</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:28%"></i></span></td></tr><tr><td><span class="note">غير محدَّد</span></td><td>1,152</td><td>6.3%</td><td><span class="dx-bar"><i class="dx-fill unknown" style="width:22%"></i></span></td></tr><tr><td><span class="">فيسبوك — مدفوع</span></td><td>1,019</td><td>5.5%</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:19%"></i></span></td></tr><tr><td><span class="note">tiktok.com / referral</span></td><td>385</td><td>2.1%</td><td><span class="dx-bar"><i class="dx-fill unknown" style="width:7%"></i></span></td></tr><tr><td><span class="note">قوقل — بحث مجاني</span></td><td>238</td><td>1.3%</td><td><span class="dx-bar"><i class="dx-fill unknown" style="width:4%"></i></span></td></tr><tr><td><span class="">شبكة ميتا — مدفوع</span></td><td>231</td><td>1.3%</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:4%"></i></span></td></tr><tr><td><span class="note">(data not available)</span></td><td>207</td><td>1.1%</td><td><span class="dx-bar"><i class="dx-fill unknown" style="width:4%"></i></span></td></tr><tr><td><span class="note">m.facebook.com / referral</span></td><td>120</td><td>0.7%</td><td><span class="dx-bar"><i class="dx-fill unknown" style="width:2%"></i></span></td></tr></tbody></table></div></section><section class="card"><h3>القمع على موقعك <span class="count">4</span></h3><p class="card-sub">من الحدث إلى الذي يليه</p><div class="table-wrap"><table><thead><tr><th>المرحلة</th><th>الأحداث</th><th>المستخدمون</th><th></th></tr></thead><tbody><tr><td>شاهد منتجًا</td><td>18,945</td><td>12,230</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:100%"></i></span></td></tr><tr><td>أضاف للسلة</td><td>5,546</td><td>1,289</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:29%"></i></span></td></tr><tr><td>بدأ الدفع</td><td>1,039</td><td>632</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:5%"></i></span></td></tr><tr><td>اشترى</td><td>254</td><td>245</td><td><span class="dx-bar"><i class="dx-fill neutral" style="width:1%"></i></span></td></tr></tbody></table></div></section><section class="card"><h3>أكثر الصفحات زيارةً <span class="count">12</span></h3><p class="card-sub">ومعدّل ارتداد كلٍّ منها</p><div class="table-wrap"><table><thead><tr><th>الصفحة</th><th>المشاهدات</th><th>المستخدمون</th><th>الارتداد</th></tr></thead><tbody><tr><td><span class="ltr">/categories/1290898/ادوات-تنظيف</span></td><td>4,233</td><td>1,894</td><td><span class="">44%</span></td></tr><tr><td><span class="ltr">/products/منظف-المراحيض-بلو-إلفانت-_-6-قطع</span></td><td>3,132</td><td>2,775</td><td><span class="">70%</span></td></tr><tr><td><span class="ltr">/</span></td><td>3,054</td><td>1,907</td><td><span class="">30%</span></td></tr><tr><td><span class="ltr">/categories/1389444/جميع-المنتجات</span></td><td>2,804</td><td>695</td><td><span class="">20%</span></td></tr><tr><td><span class="ltr">/products/عرض-الألف-كوب</span></td><td>1,361</td><td>1,214</td><td><span class="">60%</span></td></tr><tr><td><span class="ltr">/categories/1451290/عروض-نهاية-العام-تصل-الى-70</span></td><td>1,203</td><td>581</td><td><span class="">15%</span></td></tr><tr><td><span class="ltr">/products/بكج-السفرة-الاقتصادي-من-ريكسو-25-رول-سفرة-بـ-23-ري</span></td><td>1,182</td><td>1,011</td><td><span class="">57%</span></td></tr><tr><td><span class="ltr">/products/كرسي-الرحلات-11</span></td><td>1,046</td><td>789</td><td><span class="">61%</span></td></tr><tr><td><span class="ltr">/categories/1361029/مستلزماتالطبخ</span></td><td>934</td><td>517</td><td><span class="">23%</span></td></tr><tr><td><span class="ltr">/products/سائل-غسيل-من-ريكسو-5لتر2</span></td><td>877</td><td>752</td><td><span class="">61%</span></td></tr><tr><td><span class="ltr">/products/بكج-التوفير-من-ريكسو-140-كيس-بـ37-ريال-فقط</span></td><td>863</td><td>766</td><td><span class="">62%</span></td></tr><tr><td><span class="ltr">/categories/1597355/عروض-11</span></td><td>861</td><td>571</td><td><span class="">17%</span></td></tr></tbody></table></div></section></section><section class="card"><h3>ROAS حسب الحملة</h3><p class="card-sub">أعلى 7 حملة بإنفاق ≥ 50 ريال. الأشرطة الباهتة تحت نقطة التعادل. الجدول أدناه يعرض كل الحملات.</p><div class="chart"><div class="bar-row"><div class="bar-label" title="Search Brand">Search Brand</div><div class="bar-track" tabindex="0" data-tip="Search Brand · إنفاق 72 · قيمة 1,609 · تحويلات 11.0"><div class="ref-line" style="inset-inline-start:7.83%"><span class="ref-label">تعادل 1.89</span></div><div class="bar-fill" style="width:92.59%"></div><div class="bar-value">22.34</div></div></div><div class="bar-row"><div class="bar-label" title="حملة شوبينغ كتلوجات">حملة شوبينغ كتلوجات</div><div class="bar-track" tabindex="0" data-tip="حملة شوبينغ كتلوجات · إنفاق 298 · قيمة 1,919 · تحويلات 10.0"><div class="ref-line" style="inset-inline-start:7.83%"></div><div class="bar-fill" style="width:26.73%"></div><div class="bar-value">6.45</div></div></div><div class="bar-row"><div class="bar-label" title="Sales-Performance Max 1">Sales-Performance Max 1</div><div class="bar-track" tabindex="0" data-tip="Sales-Performance Max 1 · إنفاق 994 · قيمة 4,068 · تحويلات 28.3"><div class="ref-line" style="inset-inline-start:7.83%"></div><div class="bar-fill" style="width:16.95%"></div><div class="bar-value">4.09</div></div></div><div class="bar-row"><div class="bar-label" title="Sales-Performance Max- Cleaners">Sales-Performance Max- Cleaners</div><div class="bar-track" tabindex="0" data-tip="Sales-Performance Max- Cleaners · إنفاق 577 · قيمة 706 · تحويلات 3.9"><div class="ref-line" style="inset-inline-start:7.83%"></div><div class="bar-fill bar-low" style="width:5.06%"></div><div class="bar-value">1.22</div></div></div><div class="bar-row"><div class="bar-label" title="حملة بحث أدوات طبخ">حملة بحث أدوات طبخ</div><div class="bar-track" tabindex="0" data-tip="حملة بحث أدوات طبخ · إنفاق 93 · قيمة 108 · تحويلات 1.0"><div class="ref-line" style="inset-inline-start:7.83%"></div><div class="bar-fill bar-low" style="width:4.81%"></div><div class="bar-value">1.16</div></div></div><div class="bar-row"><div class="bar-label" title="حملة بحث مكانس + مماسح">حملة بحث مكانس + مماسح</div><div class="bar-track" tabindex="0" data-tip="حملة بحث مكانس + مماسح · إنفاق 355 · قيمة 303 · تحويلات 2.0"><div class="ref-line" style="inset-inline-start:7.83%"></div><div class="bar-fill bar-low" style="width:3.52%"></div><div class="bar-value">0.85</div></div></div><div class="bar-row"><div class="bar-label" title="REXO_Search_Cleaning_Sales">REXO_Search_Cleaning_Sales</div><div class="bar-track" tabindex="0" data-tip="REXO_Search_Cleaning_Sales · إنفاق 259 · قيمة 0 · تحويلات 0.0"><div class="ref-line" style="inset-inline-start:7.83%"></div><div class="bar-fill bar-low" style="width:0.00%"></div><div class="bar-value">0.00</div></div></div></div><div class="axis"><span>0</span><span>24.1</span></div></section><section class="card"><h3>كل الحملات <span class="count">17</span></h3><p class="card-sub">مرتّبة بالإنفاق تنازليًا.</p><div class="table-wrap"><table><thead><tr><th>الحملة</th><th>النوع</th><th>الحالة</th><th>الإنفاق</th><th>ROAS</th><th>CPA</th><th>تحويلات</th><th>CTR</th><th>CVR</th><th>الحكم</th></tr></thead><tbody><tr><td>Sales-Performance Max 1</td><td>PERFORMANCE_MAX</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>994</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">4.09</span><span class="meter-track"><span class="meter-fill" style="width:17.40%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>35</td><td>28.3</td><td>1.01%</td><td>3.50%</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>وسّعها</span></td></tr><tr><td>Sales-Performance Max- Cleaners</td><td>PERFORMANCE_MAX</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>577</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">1.22</span><span class="meter-track"><span class="meter-fill" style="width:5.19%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>148</td><td>3.9</td><td>1.23%</td><td>0.79%</td><td><span class="badge b-serious"><span class="badge-icon" aria-hidden="true">▼</span>حسّنها</span></td></tr><tr><td>حملة بحث مكانس + مماسح</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>355</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.85</span><span class="meter-track"><span class="meter-fill" style="width:3.62%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>178</td><td>2.0</td><td>4.56%</td><td>1.14%</td><td><span class="badge b-serious"><span class="badge-icon" aria-hidden="true">▼</span>حسّنها</span></td></tr><tr><td>حملة شوبينغ كتلوجات</td><td>SHOPPING</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>298</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">6.45</span><span class="meter-track"><span class="meter-fill" style="width:27.45%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>30</td><td>10.0</td><td>0.88%</td><td>3.86%</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>وسّعها</span></td></tr><tr><td>REXO_Search_Cleaning_Sales</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>259</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>4.20%</td><td>0.00%</td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>أوقفها</span></td></tr><tr><td>حملة بحث أدوات طبخ</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>93</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">1.16</span><span class="meter-track"><span class="meter-fill" style="width:4.94%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>93</td><td>1.0</td><td>5.56%</td><td>2.78%</td><td><span class="badge b-serious"><span class="badge-icon" aria-hidden="true">▼</span>حسّنها</span></td></tr><tr><td>Search Brand</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>72</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">22.34</span><span class="meter-track"><span class="meter-fill" style="width:95.06%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>7</td><td>11.0</td><td>32.27%</td><td>12.09%</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>وسّعها</span></td></tr><tr><td>REXO_Search_SuperCleaner_Individual</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>10</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>6.45%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Campaign #1</td><td>PERFORMANCE_MAX</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">✕</span>محذوفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Sales-Search-1 #3</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">✕</span>محذوفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Sales-Search-1</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">⏸</span>متوقّفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Sales-Search-1 #2</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">✕</span>محذوفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Sales-Shopping-2</td><td>SHOPPING</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">⏸</span>متوقّفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Sales-Shopping-1</td><td>SHOPPING</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">⏸</span>متوقّفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Sales-Search-8</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">⏸</span>متوقّفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>Sales-Shopping-3</td><td>SHOPPING</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">⏸</span>متوقّفة</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr><tr><td>REXO_Search_Growth</td><td>SEARCH</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">○</span>Enabled</span></td><td>0</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.00</span><span class="meter-track"><span class="meter-fill" style="width:0.00%"></span><span class="meter-tick" style="inset-inline-start:8.04%"></span></span></span></td><td>—</td><td>0.0</td><td>0.00%</td><td>0.00%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>بيانات غير كافية</span></td></tr></tbody></table></div></section><section class="card"><h3>ROAS حسب الجهاز</h3><p class="card-sub">وجّه تعديلات عروض الأسعار بناءً على هذا.</p><div class="chart"><div class="bar-row"><div class="bar-label" title="DESKTOP">DESKTOP</div><div class="bar-track" tabindex="0" data-tip="DESKTOP · إنفاق 84 · قيمة 847"><div class="ref-line" style="inset-inline-start:17.33%"><span class="ref-label">تعادل 1.89</span></div><div class="bar-fill" style="width:92.59%"></div><div class="bar-value">10.10</div></div></div><div class="bar-row"><div class="bar-label" title="MOBILE">MOBILE</div><div class="bar-track" tabindex="0" data-tip="MOBILE · إنفاق 2,544 · قيمة 7,819"><div class="ref-line" style="inset-inline-start:17.33%"></div><div class="bar-fill" style="width:28.14%"></div><div class="bar-value">3.07</div></div></div><div class="bar-row"><div class="bar-label" title="TABLET">TABLET</div><div class="bar-track" tabindex="0" data-tip="TABLET · إنفاق 30 · قيمة 46"><div class="ref-line" style="inset-inline-start:17.33%"></div><div class="bar-fill bar-low" style="width:14.39%"></div><div class="bar-value">1.57</div></div></div></div><div class="axis"><span>0</span><span>10.9</span></div></section><section class="card"><h3>تفصيل الأجهزة <span class="count">3</span></h3><div class="table-wrap"><table><thead><tr><th>الجهاز</th><th>الإنفاق</th><th>القيمة</th><th>ROAS</th><th>تحويلات</th></tr></thead><tbody><tr><td>DESKTOP</td><td>84</td><td>847</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">10.10</span><span class="meter-track"><span class="meter-fill" style="width:95.28%"></span><span class="meter-tick" style="inset-inline-start:17.83%"></span></span></span></td><td>4.0</td></tr><tr><td>MOBILE</td><td>2,544</td><td>7,819</td><td><span class="metric" style="--sev:var(--warning)"><span class="metric-num">3.07</span><span class="meter-track"><span class="meter-fill" style="width:28.96%"></span><span class="meter-tick" style="inset-inline-start:17.83%"></span></span></span></td><td>51.9</td></tr><tr><td>TABLET</td><td>30</td><td>46</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">1.57</span><span class="meter-track"><span class="meter-fill" style="width:14.81%"></span><span class="meter-tick" style="inset-inline-start:17.83%"></span></span></span></td><td>0.4</td></tr></tbody></table></div></section><section class="card"><h3>الاتجاه اليومي — ROAS لكل يوم</h3><p class="card-sub">الخط المنقّط هو التعادل. الأعمدة الرمادية إنفاق ذلك اليوم.</p><div class="spark-wrap"><svg viewBox="0 0 760 200" class="spark" role="img" aria-label="الاتجاه اليومي — ROAS لكل يوم"><rect x="5.9" y="134.8" width="56.3" height="39.2" class="spark-spend"/><rect x="125.2" y="138.3" width="56.3" height="35.7" class="spark-spend"/><rect x="244.5" y="134.6" width="56.3" height="39.4" class="spark-spend"/><rect x="363.9" y="130.0" width="56.3" height="44.0" class="spark-spend"/><rect x="483.2" y="137.9" width="56.3" height="36.1" class="spark-spend"/><rect x="602.5" y="129.6" width="56.3" height="44.4" class="spark-spend"/><rect x="721.9" y="122.8" width="56.3" height="51.2" class="spark-spend"/><polygon points="34,174 34.0,34.9 153.3,137.4 272.7,88.9 392.0,140.9 511.3,104.7 630.7,136.0 750.0,104.5 750.0,174" class="spark-area"/><polyline points="34.0,34.9 153.3,137.4 272.7,88.9 392.0,140.9 511.3,104.7 630.7,136.0 750.0,104.5" class="spark-line"/><line x1="34" x2="750" y1="135.6" y2="135.6" class="spark-be"/><text x="36" y="131.6" class="spark-be-label">تعادل 1.89</text><text x="29" y="18" class="spark-y">7.9</text><text x="29" y="174.0" class="spark-y">0</text><circle cx="34.0" cy="34.9" r="3.2" class="spark-dot"><title>2026-08-01 · ROAS 6.85 · إنفاق 360 · قيمة 2,464 · تحويلات 11</title></circle><circle cx="153.3" cy="137.4" r="3.2" class="spark-dot dot-low"><title>2026-08-02 · ROAS 1.80 · إنفاق 328 · قيمة 589 · تحويلات 5</title></circle><circle cx="272.7" cy="88.9" r="3.2" class="spark-dot"><title>2026-08-03 · ROAS 4.19 · إنفاق 361 · قيمة 1,512 · تحويلات 10</title></circle><circle cx="392.0" cy="140.9" r="3.2" class="spark-dot dot-low"><title>2026-08-04 · ROAS 1.63 · إنفاق 403 · قيمة 657 · تحويلات 6</title></circle><circle cx="511.3" cy="104.7" r="3.2" class="spark-dot"><title>2026-08-05 · ROAS 3.41 · إنفاق 331 · قيمة 1,127 · تحويلات 9</title></circle><circle cx="630.7" cy="136.0" r="3.2" class="spark-dot dot-low"><title>2026-08-06 · ROAS 1.87 · إنفاق 407 · قيمة 760 · تحويلات 5</title></circle><circle cx="750.0" cy="104.5" r="3.2" class="spark-dot"><title>2026-08-07 · ROAS 3.42 · إنفاق 469 · قيمة 1,604 · تحويلات 10</title></circle><text x="34.0" y="192" class="spark-x" text-anchor="start">08-01</text><text x="392.0" y="192" class="spark-x" text-anchor="middle">08-04</text><text x="750.0" y="192" class="spark-x" text-anchor="end">08-07</text></svg></div><p class="card-note">النصف الأول 4.36 ← النصف الثاني 2.58 (▼ تراجع). 3 من 7 يومًا تحت التعادل. أفضل يوم 2026-08-01 بـ 6.85 · أسوأ يوم 2026-08-04 بـ 1.63.</p></section><section class="card"><h3>ROAS لكل يوم — مرتّبة من الأفضل إلى الأسوأ</h3><p class="card-sub">7 يومًا، كل يوم على حدة. ما يقف قبل خط التعادل خسر ذلك اليوم.</p><div class="chart"><div class="bar-row"><div class="bar-label" title="السبت 08-01">السبت 08-01</div><div class="bar-track" tabindex="0" data-tip="2026-08-01 · إنفاق 360 · قيمة 2,464 · تحويلات 11"><div class="ref-line" style="inset-inline-start:25.55%"><span class="ref-label">تعادل 1.89</span></div><div class="bar-fill" style="width:92.59%"></div><div class="bar-value">6.85</div></div></div><div class="bar-row"><div class="bar-label" title="الإثنين 08-03">الإثنين 08-03</div><div class="bar-track" tabindex="0" data-tip="2026-08-03 · إنفاق 361 · قيمة 1,512 · تحويلات 10"><div class="ref-line" style="inset-inline-start:25.55%"></div><div class="bar-fill" style="width:56.64%"></div><div class="bar-value">4.19</div></div></div><div class="bar-row"><div class="bar-label" title="الجمعة 08-07">الجمعة 08-07</div><div class="bar-track" tabindex="0" data-tip="2026-08-07 · إنفاق 469 · قيمة 1,604 · تحويلات 10"><div class="ref-line" style="inset-inline-start:25.55%"></div><div class="bar-fill" style="width:46.23%"></div><div class="bar-value">3.42</div></div></div><div class="bar-row"><div class="bar-label" title="الأربعاء 08-05">الأربعاء 08-05</div><div class="bar-track" tabindex="0" data-tip="2026-08-05 · إنفاق 331 · قيمة 1,127 · تحويلات 9"><div class="ref-line" style="inset-inline-start:25.55%"></div><div class="bar-fill" style="width:46.09%"></div><div class="bar-value">3.41</div></div></div><div class="bar-row"><div class="bar-label" title="الخميس 08-06">الخميس 08-06</div><div class="bar-track" tabindex="0" data-tip="2026-08-06 · إنفاق 407 · قيمة 760 · تحويلات 5"><div class="ref-line" style="inset-inline-start:25.55%"></div><div class="bar-fill bar-low" style="width:25.28%"></div><div class="bar-value">1.87</div></div></div><div class="bar-row"><div class="bar-label" title="الأحد 08-02">الأحد 08-02</div><div class="bar-track" tabindex="0" data-tip="2026-08-02 · إنفاق 328 · قيمة 589 · تحويلات 5"><div class="ref-line" style="inset-inline-start:25.55%"></div><div class="bar-fill bar-low" style="width:24.33%"></div><div class="bar-value">1.80</div></div></div><div class="bar-row"><div class="bar-label" title="الثلاثاء 08-04">الثلاثاء 08-04</div><div class="bar-track" tabindex="0" data-tip="2026-08-04 · إنفاق 403 · قيمة 657 · تحويلات 6"><div class="ref-line" style="inset-inline-start:25.55%"></div><div class="bar-fill bar-low" style="width:22.03%"></div><div class="bar-value">1.63</div></div></div></div><div class="axis"><span>0</span><span>7.4</span></div></section><section class="card"><h3>تفصيل الأيام <span class="count">7</span></h3><p class="card-sub">كل يوم على حدة — للمطابقة مع لوحة المنصة أو تتبّع أثر تغيير أجريته.</p><div class="table-wrap"><table><thead><tr><th>التاريخ</th><th>الإنفاق</th><th>القيمة</th><th>ROAS</th><th>تحويلات</th><th>الحالة</th></tr></thead><tbody><tr><td>2026-08-07</td><td>469</td><td>1,604</td><td>3.42</td><td>10.0</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>فوق التعادل</span></td></tr><tr><td>2026-08-06</td><td>407</td><td>760</td><td>1.87</td><td>5.0</td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">▼</span>تحت التعادل</span></td></tr><tr><td>2026-08-05</td><td>331</td><td>1,127</td><td>3.41</td><td>8.9</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>فوق التعادل</span></td></tr><tr><td>2026-08-04</td><td>403</td><td>657</td><td>1.63</td><td>6.3</td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">▼</span>تحت التعادل</span></td></tr><tr><td>2026-08-03</td><td>361</td><td>1,512</td><td>4.19</td><td>10.0</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>فوق التعادل</span></td></tr><tr><td>2026-08-02</td><td>328</td><td>589</td><td>1.80</td><td>5.4</td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">▼</span>تحت التعادل</span></td></tr><tr><td>2026-08-01</td><td>360</td><td>2,464</td><td>6.85</td><td>10.7</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>فوق التعادل</span></td></tr></tbody></table></div></section><section class="card"><h3>منتجات محقِّقة للمبيعات <span class="count">21</span></h3><p class="card-sub">ابنِ مجموعة أصول عالية الأولوية حول الأعلى منها.</p><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>المعرّف</th><th>الإنفاق</th><th>القيمة</th><th>ROAS</th><th>تحويلات</th><th>نقرات</th></tr></thead><tbody><tr><td>مناديل ورقية معلقة ريكسو (REXO) - عبوة التوفير (6 عبوات × 1500 منديل)</td><td>4dd69987-f6c1-4b29-b459-96a184de5ea9</td><td>557</td><td>2,589</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">4.65</span><span class="meter-track"><span class="meter-fill" style="width:0.76%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>16.0</td><td>324</td></tr><tr><td>عرض الألف كوب</td><td>3d3d742c-6b75-497b-a097-e6221a9f3faf</td><td>38</td><td>441</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">11.75</span><span class="meter-track"><span class="meter-fill" style="width:1.93%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>2.2</td><td>68</td></tr><tr><td>مق Marble – للحار والبارد 1.4 لتر</td><td>59f863a3-a723-42fc-96fa-e96b1a5219d7</td><td>11</td><td>419</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">37.15</span><span class="meter-track"><span class="meter-fill" style="width:6.10%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>1.0</td><td>22</td></tr><tr><td>بكج التوفير من ريكسو : 200 كيس 69ريال فقط</td><td>7bc74ddc-c056-4302-abc5-aff264a5e89a</td><td>96</td><td>256</td><td><span class="metric" style="--sev:var(--warning)"><span class="metric-num">2.68</span><span class="meter-track"><span class="meter-fill" style="width:0.44%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>3.0</td><td>53</td></tr><tr><td>مساحة ارضيات جلد ريكسو 42 سم لتنظيف وتجفيف الأرضيات بسهولة | REXO</td><td>d8be3b3b-c9f2-449e-8ead-b0ab126ffadb</td><td>12</td><td>251</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">20.94</span><span class="meter-track"><span class="meter-fill" style="width:3.44%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>1.1</td><td>10</td></tr><tr><td>منظف المراحيض بلو إلفانت _ 6 قطع</td><td>1f7a4408-6e09-47a9-9dbc-f980e528e6cc</td><td>9</td><td>251</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">29.27</span><span class="meter-track"><span class="meter-fill" style="width:4.80%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>2.0</td><td>8</td></tr><tr><td>كرسي كمفورت من ريكسو</td><td>0cdae546-68de-4d55-b822-d067775b8c7b</td><td>10</td><td>240</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">23.62</span><span class="meter-track"><span class="meter-fill" style="width:3.88%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>1.0</td><td>4</td></tr><tr><td>فرشة المرحاض الحمراء بقاعدة ثابتة لتنظيف فعّال وأناقة في كل زاوية</td><td>15ba385f-e7b4-4fc6-acf4-7e58dfef5b50</td><td>2</td><td>187</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">114.85</span><span class="meter-track"><span class="meter-fill" style="width:18.85%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>1.0</td><td>3</td></tr><tr><td>رول تنظيف مطبخ أبيض متعدد الاستخدام – امتصاص عالي وتنظيف عملي | REXO</td><td>6452ea30-996d-455f-b68d-4ed9c31ab033</td><td>3</td><td>139</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">41.53</span><span class="meter-track"><span class="meter-fill" style="width:6.82%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>1.0</td><td>5</td></tr><tr><td>عرض كراسى الجمعات - كرسيين أرضي تراثي لمسة تراثية وراحة فاخرة جلستين... ولمّة وحدة</td><td>f5f94dbe-4149-448c-a44e-78eaea8292e3</td><td>44</td><td>132</td><td><span class="metric" style="--sev:var(--warning)"><span class="metric-num">3.04</span><span class="meter-track"><span class="meter-fill" style="width:0.50%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>1.0</td><td>47</td></tr><tr><td>منشفة مايكروفايبر ريكسو 40×40 سم عبوة 6 قطع – تنظيف احترافي بدون خدوش | REXO</td><td>0c917a50-8e82-4b5f-99bb-5922a0074bd8</td><td>11</td><td>90</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">8.21</span><span class="meter-track"><span class="meter-fill" style="width:1.35%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>1.0</td><td>16</td></tr><tr><td>حافظات فريش لوك</td><td>547ca790-4d22-4f86-b2aa-722a1a2d764f</td><td>0</td><td>87</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">580.27</span><span class="meter-track"><span class="meter-fill" style="width:95.24%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.6</td><td>1</td></tr><tr><td>ممسحة أرضيات مسطحة 360° متعددة الاستخدام لتنظيف أسرع | REXO</td><td>207e6075-16e7-4d94-b172-dd54ab09cb43</td><td>33</td><td>86</td><td><span class="metric" style="--sev:var(--warning)"><span class="metric-num">2.59</span><span class="meter-track"><span class="meter-fill" style="width:0.43%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.9</td><td>25</td></tr><tr><td>أكياس نفايات 10 جالون – عبوة 95 كيس | متينة وعملية باللون الأزرق</td><td>15917070-9e7e-475a-875f-e6da555610b7</td><td>21</td><td>41</td><td><span class="metric" style="--sev:var(--warning)"><span class="metric-num">1.95</span><span class="meter-track"><span class="meter-fill" style="width:0.32%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.2</td><td>11</td></tr><tr><td>أكياس حفظ الطعام القوية من ريكسو مقاس 10 عدد 100</td><td>da8a677a-5b2d-4e5b-9240-61705c81e322</td><td>4</td><td>35</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">8.10</span><span class="meter-track"><span class="meter-fill" style="width:1.33%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.2</td><td>8</td></tr><tr><td>رول نايلون تغليف شفاف 30 سم × 1 كجم – الحل العملي لحفظ الطعام والتخزين اليومي | REXO</td><td>a0554b6f-cd07-4d09-90fd-5c341f2bb4b6</td><td>4</td><td>35</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">8.35</span><span class="meter-track"><span class="meter-fill" style="width:1.37%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.2</td><td>3</td></tr><tr><td>اكياس شواء حرارية للفرن – طبخ أسهل ونظافة أكثر مع REXO</td><td>f110ebd7-f1ed-4d8c-943d-49731f4995aa</td><td>4</td><td>35</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">8.87</span><span class="meter-track"><span class="meter-fill" style="width:1.46%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.2</td><td>2</td></tr><tr><td>رول ورق زبدة للطهي والخبز 10م × 30سم يمنع الالتصاق ويوفر وقتك</td><td>c4348854-6716-447a-a7e1-279d41683032</td><td>3</td><td>35</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">14.07</span><span class="meter-track"><span class="meter-fill" style="width:2.31%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.2</td><td>0</td></tr><tr><td>اكياس نايلون REXO-مقاس 11</td><td>64d800c7-cd84-4c25-9838-3c63e043abde</td><td>1</td><td>28</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">48.37</span><span class="meter-track"><span class="meter-fill" style="width:7.94%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.2</td><td>0</td></tr><tr><td>قفازات مطاط XL ريكسو مقاومة للبكتيريا للتنظيف والأعمال المنزلية | REXO</td><td>7275d00a-1f05-4291-90e4-f7f5729bf949</td><td>18</td><td>10</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.52</span><span class="meter-track"><span class="meter-fill" style="width:0.09%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.1</td><td>20</td></tr><tr><td>رول ورق زبدة ريكسو 30 سم × 5 متر (2 حبة) – للطهي والخبز بدون التصاق | REXO</td><td>e9f46eb8-04e1-4897-a0e4-8e14d1ca51c0</td><td>3</td><td>8</td><td><span class="metric" style="--sev:var(--warning)"><span class="metric-num">2.46</span><span class="meter-track"><span class="meter-fill" style="width:0.40%"></span><span class="meter-tick" style="inset-inline-start:0.31%"></span></span></span></td><td>0.1</td><td>1</td></tr></tbody></table></div></section><section class="card"><h3>منتجات أهدرت الميزانية <span class="count">127</span></h3><p class="card-sub">إنفاق بلا أي تحويل — إجمالي مهدور 680 ريال. مرشّحة للاستبعاد من مجموعة الأصول.</p><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>المعرّف</th><th>الإنفاق المهدور</th><th>نقرات</th></tr></thead><tbody><tr><td>أكياس نفايات كبيرة جدًا 50 جالون 3 حبات (60 كيس) متينة باللون الأسود</td><td>a9dda268-6345-44b4-a3e8-b32f1f12406a</td><td>131</td><td>52</td></tr><tr><td>ممسحة بخاخ ريكسو 3 في 1 لتنظيف الأرضيات بسهولة | REXO</td><td>8228200f-0103-4cdf-b2cf-3609b91fcea9</td><td>51</td><td>73</td></tr><tr><td>مناشف مايكروفايبر ريكسو 40×40 سم 12 قطعة – تنظيف احترافي بدون خدوش | REXO</td><td>f9053938-9e1d-428a-85ed-47310079e6f1</td><td>46</td><td>25</td></tr><tr><td>بكج النظافة الفائقة من ريكسو</td><td>7e801510-ff69-448d-b09d-c7e04d9a7ff7</td><td>37</td><td>33</td></tr><tr><td>مجموعة تنظيف المنزل من ريكسو 360 – حلول تنظيف متكاملة لكل المنزل | REXO</td><td>a3c33a0a-4cf7-49e6-b8fb-0cfa6adb0ac2</td><td>26</td><td>10</td></tr><tr><td>RELAXA استراحة أرضية</td><td>69140552-2501-43ac-9828-5b36a6a20124</td><td>23</td><td>31</td></tr><tr><td>سلة نفايات مزدوجة للفناء الخارجي 50 لتر</td><td>1b4c8902-1fa6-425d-a9f0-32b68e955458</td><td>23</td><td>11</td></tr><tr><td>بكج السفرة الاقتصادي من ريكسو 30 رول سفرة بـ 49 ريال فقط</td><td>161dd118-0fc8-4a9b-ae45-29aaa33c4acd</td><td>20</td><td>18</td></tr><tr><td>كرسي تخييم قابل للطي - خفيف الوزن مع مقبض خشبي</td><td>317c4480-bfc5-4421-81c1-3d14133a11bb</td><td>16</td><td>14</td></tr><tr><td>ممسحة مثلثة قابلة للدوران لتنظيف الزوايا والأرضيات بسهولة | REXO</td><td>773d079f-7613-491c-a618-88d29d32475c</td><td>16</td><td>16</td></tr><tr><td>منظف المرحاض الرغوي تركيبة فعّالة تزيل الأوساخ والروائح الكريهة</td><td>e535d570-bc91-48ee-ae44-174c7be83126</td><td>14</td><td>10</td></tr><tr><td>فرشة تنظيف مرحاض – قاعدة ثابتة</td><td>d9ba174a-b1e0-4391-b623-61f171d84eb6</td><td>13</td><td>7</td></tr><tr><td>اسفنيك معطر حمام ملون كبير 200 جم – انتعاش يدوم وحماية عملية | REXO</td><td>e7c9c4a8-1e5e-44b7-be2c-31e47df86c6a</td><td>12</td><td>46</td></tr><tr><td>معطر اسفنيك ملون صغير 100 g لإزالة روائح الحمامات</td><td>aa657ccc-c664-475f-b821-0f0dfd8ca50a</td><td>12</td><td>17</td></tr><tr><td>عرض ممسحة X مع رول مناديل هدية – نظافة أكثر وتوفير أكبر | REXO</td><td>1150d0b4-7398-4fba-aeaf-967767822c3c</td><td>11</td><td>6</td></tr><tr><td>سائل غسيل ريكسو الاقتصادي – 5 لتر لإزالة أصعب البقع من الملابس البيضاء والملونة</td><td>fb7ba674-d353-4cd0-8fbb-df2bbc948d68</td><td>11</td><td>4</td></tr><tr><td>معطر اسفنيك ابيض 100g لإزالة روائح الحمامات</td><td>7d67b725-3d18-4a08-8293-3214dbd2995b</td><td>10</td><td>24</td></tr><tr><td>حقيبة يد قماشية أنيقة متعددة الاستخدامات بتصميم زهري عصري</td><td>bc562658-a583-49a9-af63-27aaa35cf981</td><td>10</td><td>22</td></tr><tr><td>معطر 3 قطع بحماية قوية من الروائح - انتعاش دائم للمرحاض</td><td>551d0154-39c0-4262-b495-a1eb13f346bb</td><td>10</td><td>9</td></tr><tr><td>مساحة بخاخ ريكسو مايكروفايبر – تنظيف سريع وعملي للأرضيات | REXO</td><td>e36fa04d-3e91-4039-914c-e8865155361e</td><td>9</td><td>9</td></tr><tr><td>كرسي رحلات قابل للطي متعدد الوضعيات مع جيوب جانبية للتخزين يوفر راحة مثالية في أي مكان</td><td>bd73ae6f-a66c-4151-b75c-710317adc6f4</td><td>9</td><td>9</td></tr><tr><td>بكج ريكسو الذكي للنظافة الشاملة</td><td>241276cf-6118-4421-a7a1-e47d654c353a</td><td>9</td><td>6</td></tr><tr><td>ممسحة مايكروفايبر – تنظيف ثقيل بدلو مطور</td><td>c9d26634-17cc-4000-ba8a-6a076da784d6</td><td>8</td><td>4</td></tr><tr><td>معطر حمام ريكسو 3 قطع – حماية قوية من الروائح وانتعاش يدوم طويلًا | REXO</td><td>7fb32be7-e970-4f0a-9306-179fdb889a29</td><td>7</td><td>19</td></tr><tr><td>سلة موف كلين 15 لتر</td><td>cdd48346-f05e-4da6-a7df-33e14fdc2130</td><td>6</td><td>5</td></tr><tr><td>ممسحة أرضيات بفرشاة تنظيف عميق بلمسة واحدة</td><td>e0e3c153-2245-4a96-acde-bba7318d2fab</td><td>6</td><td>9</td></tr><tr><td>مسّاحة مايكروفايبر احترافية بعصارة مدمجة لأداء عالي وسهولة في الاستخدام.</td><td>2c4c9ce3-5062-4c02-9dd6-3a9bb6a72570</td><td>6</td><td>5</td></tr><tr><td>سائل غسيل الملابس برائحة منعشة مناسب لجميع أنواع الملابس والأقمشة 2لتر</td><td>55d20659-95a4-409e-8283-92a6035ff515</td><td>5</td><td>7</td></tr><tr><td>بخاخ بلاستيك إيطالي 1000 مل – عبوة قطعتين متعددة الاستخدام | REXO</td><td>edeee985-a87d-430e-8b1b-2f3a824ea5ea</td><td>5</td><td>7</td></tr><tr><td>صندل خفيف للمنزل مرونة وأناقة للاستخدام اليومي</td><td>471da197-ca70-4306-9f72-fd44f5c092cf</td><td>5</td><td>11</td></tr><tr><td>بكج على كيفك - خليك على طول جاهز</td><td>62575487-30d5-4401-932d-18c076eae268</td><td>5</td><td>3</td></tr><tr><td>كمية تكفي وسعر يرضي سائل غسيل 12 لتر</td><td>1bcd0c2a-80db-47d9-9c75-f72a119296a0</td><td>5</td><td>6</td></tr><tr><td>سلة موف كلين 45 لتر</td><td>2210578c-1705-4dd8-8420-897d42e4dfff</td><td>5</td><td>2</td></tr><tr><td>سلك تنظيف ستانلس ستيل 12 قطعة – سلك جلي مقاوم للصدأ | REXO</td><td>b78b45af-367a-497a-885c-2f0d2894e599</td><td>5</td><td>19</td></tr><tr><td>حبيبات معطرة لملابس برائحة منعشة -رائحة تدوم طويلا</td><td>0111f32b-8300-465c-90cc-3e08ee1dbcaa</td><td>5</td><td>5</td></tr><tr><td>مناديل ميني لتنظيف العباية من ريكسو (REXO)</td><td>252d1791-e058-4c78-aee7-8ce929d515e7</td><td>4</td><td>3</td></tr><tr><td>معجون تنظيف سحري متعدد الاستخدامات – إزالة أصعب الدهون والبقع بسهولة | REXO</td><td>330e01f8-7954-48d7-a0ce-811adea50307</td><td>4</td><td>8</td></tr><tr><td>ورق قلاية هوائية باللون البني 3 ربطات (150 قطعة) للاستخدام العملي اليومي</td><td>79dec128-2ca7-4bbd-a796-9f982f7a63be</td><td>3</td><td>1</td></tr><tr><td>منظف المرحاض Blue Elephant تركيبة فعالة قوية ضد الجراثيم</td><td>8c090218-f469-40b2-9205-5b09abf46ba1</td><td>3</td><td>5</td></tr><tr><td>اكياس حفظ طعام XL ريكسو بسحاب محكم للكميات الكبيرة | REXO</td><td>94322174-23b6-4e9d-8be8-feb903268106</td><td>3</td><td>4</td></tr><tr><td>اكياس محكمة الاغلاق ريكسو مقاس 7 – غلق آمن لحفظ وتخزين الطعام | REXO</td><td>75125635-3ca4-4a24-ace3-c21aa47292f8</td><td>3</td><td>8</td></tr><tr><td>سليبر منزلي خفيف الوزن بتصميم أنيق ومريح، مقاوم للانزلاق</td><td>24bcdea3-6b06-4edc-b2cb-334a4544c88f</td><td>3</td><td>4</td></tr><tr><td>مناشف مايكروفايبر فاخرة لتنظيف فائق اللمعان عبوة من 3 قطع</td><td>8241edef-5a51-4c8d-94b6-ad22bc9bca5e</td><td>3</td><td>4</td></tr><tr><td>رول تنظيف ريكسو عملي وناعم للمطبخ والحمام – عبوة 3 قطع | REXO</td><td>4e80402c-b001-4725-bf3e-ec3c3b5a7522</td><td>3</td><td>4</td></tr><tr><td>شامبو عباية ريكسو 2 لتر برائحة الياسمين – عناية فائقة بالعبايات والملابس الداكنة | REXO</td><td>9d6b8359-cedf-4b60-bfe2-da8aae510c26</td><td>3</td><td>6</td></tr><tr><td>عرض دبل الروقان - قطعتين</td><td>75b39dc7-1e8e-4d50-aaef-a6a1d3924633</td><td>3</td><td>2</td></tr><tr><td>أعواد تسليك البالوعات والمجاري 12قطعة</td><td>cff5b101-696b-4dac-a3ae-6bddf1b9962f</td><td>3</td><td>6</td></tr><tr><td>معطر الملابس سليفر بوت - برائحة كوتون ويسبر عطر منعش يدوم طويلا</td><td>c79b8105-9bd9-4f4b-8ffd-67b14b3a218e</td><td>3</td><td>3</td></tr><tr><td>لاصق سجادات مزدوج أمان، ثبات، وراحة في الاستخدام</td><td>136c6060-e626-4164-90e8-8eda33cedd42</td><td>3</td><td>5</td></tr><tr><td>كرسي رحلات</td><td>ed4f443b-e5fa-45e3-ba56-890e81d8308d</td><td>2</td><td>1</td></tr><tr><td>كرسي الرحلات الذكي من REXO</td><td>bf2ec4fb-aa33-455e-8341-3f5b68c95f5d</td><td>2</td><td>3</td></tr><tr><td>رول قصدير ألمنيوم ريكسو 45 سم × 3 متر (قطعتين) – تغليف آمن وجودة عالية | REXO</td><td>aeb240d7-d01f-4212-8d9c-a516631ee97c</td><td>2</td><td>3</td></tr><tr><td>سائل غسيل الثياب من ريكسو</td><td>b0b5a518-b2b2-4a0b-aeb6-a35638ea764a</td><td>2</td><td>2</td></tr><tr><td>اكياس تبريد M ريكسو بسحاب محكم عبوة 15 قطعة – حفظ آمن وطعام طازج لفترة أطول | REXO</td><td>17eeed3e-7616-4a2e-9f6f-24355586e7db</td><td>2</td><td>1</td></tr><tr><td>مناشف روب بغطاء رأس 70*125</td><td>a730744f-7a55-4902-88a7-3abd0a8c6b5a</td><td>2</td><td>1</td></tr><tr><td>معطر حمام وردة من كواليتي – انتعاش فوري ورائحة تدوم | REXO</td><td>38d851c2-c965-4df8-ab99-3bd944b6c529</td><td>2</td><td>7</td></tr><tr><td>شرائح ورق الزبدة مقاس 40x52 سم</td><td>67bb2c29-267f-42dd-b0b2-8c170a473c58</td><td>2</td><td>2</td></tr><tr><td>مناشف مايكروفايبر ريكسو</td><td>2deb916e-f8cd-4acc-9165-067e20375b4b</td><td>2</td><td>1</td></tr><tr><td>شنطة يد عصرية عملية وأنيقة للاستخدام اليومي أو الجامعة</td><td>3e8a4172-1400-435d-b253-6fc121bc6066</td><td>2</td><td>4</td></tr><tr><td>ممسحة مايكروفايبر X بعصر ذاتي – أداء احترافي لتنظيف الأرضيات | REXO</td><td>2786a0ec-fa88-4c6f-a8d2-d1fd5be1e52d</td><td>1</td><td>2</td></tr><tr><td>مناشف مايكروفايبر مبطنة متعددة الاستخدام – عبوة قطعتين | REXO</td><td>618bbe1c-c4d7-4106-91c6-82a9ede17b5f</td><td>1</td><td>3</td></tr><tr><td>روب مايكروفايبر فائق الامتصاص راحة ناعمة وتجفيف سريع للجسم</td><td>3fc4810c-f45d-42cf-9e48-254f95aa8545</td><td>1</td><td>1</td></tr><tr><td>معطر حمام على شكل قلب كواليتي عطر منعش وأناقة للحمام</td><td>6c460c2b-c528-4f07-8fd7-9ac6966d704f</td><td>1</td><td>1</td></tr><tr><td>عرض ريكسو: قفازات ومناشف مايكروفايبر (1+1)</td><td>f82bca23-d4f3-4ca9-8eb1-2648e50364c6</td><td>1</td><td>1</td></tr><tr><td>أقراص إزالة المكياج القطنية عبوة 80 حبة</td><td>4f4db3b4-ee08-494b-8aec-bb47f3edce91</td><td>1</td><td>1</td></tr><tr><td>شفرات ويتيل 16 قطعة - لحلاقة ناعمة</td><td>233744ee-6da2-4f72-bd62-d8ba906b82d1</td><td>1</td><td>2</td></tr><tr><td>الفواحة الذكية</td><td>25e8e6f7-54fa-41dd-916e-e0e4b3bb4a82</td><td>1</td><td>1</td></tr><tr><td>معطر الملابس سليفر بوت - برائحة فالي بلوم عطر منعش يدوم طويلا</td><td>7edc4833-8b37-48d5-86d4-6335e3e80ec8</td><td>1</td><td>3</td></tr><tr><td>أكياس زبلوك – غلق محكم لتخزين آمن مقاس 9</td><td>6aaece35-7ece-45a5-8f7d-7818685a06c3</td><td>1</td><td>1</td></tr><tr><td>قفازات مطاط L ريكسو مقاومة للبكتيريا للتنظيف والأعمال المنزلية | REXO</td><td>1093db9c-2303-4cd0-af35-f373ae8e0f61</td><td>1</td><td>1</td></tr><tr><td>سجادة شاطئ مستطيلة</td><td>bbd1c426-9b83-424d-b7de-ff15f92fca09</td><td>1</td><td>1</td></tr><tr><td>معطر اسفنيك ريكسو 5 حبات – إزالة روائح الحمامات وانتعاش يدوم | REXO</td><td>cc08da42-4920-41e2-97d5-ed5967874388</td><td>1</td><td>4</td></tr><tr><td>مناشف أفران مايكروفايبر – قطعتين بنكي وأزرق</td><td>5dcfce9e-3ac1-4e3c-a24e-47ae4c782b99</td><td>1</td><td>1</td></tr><tr><td>اكياس نايلون REXO-مقاس 6</td><td>50acffdc-d750-485c-ae56-3d7de6524d49</td><td>1</td><td>3</td></tr><tr><td>كرات معطرة للحمام كواليتي ملونة – 7 حبات لانتعاش يدوم طويلًا | REXO</td><td>0a48aaae-d1bb-4825-8576-0c3c614635fc</td><td>1</td><td>1</td></tr><tr><td>منشفة جسم من ريكسو 40 * 75 - ميكروفايبر نعومة و امتصاص فائق</td><td>09ec20bd-5366-46a6-99e3-ba2137a9f851</td><td>1</td><td>1</td></tr><tr><td>رف جداري لاصق مع 4 خطافات للتنظيم بدون حفر</td><td>eea87ade-a52a-4546-a42f-ad158d9a9285</td><td>1</td><td>1</td></tr><tr><td>سطل تنظيف مزدوج – بتقنية فصل الماء</td><td>9958fb7b-3fc2-4da4-a647-f5617f50362b</td><td>1</td><td>2</td></tr><tr><td>كرسي صغير قابل للطي وخفيف الوزن للسفر والنزهة والتخييم</td><td>3f47b27f-be7a-48b5-aea1-8743e84eb2e2</td><td>1</td><td>2</td></tr><tr><td>روب استحمام مايكروفايبر بغطاء رأس لراحة مثالية</td><td>05ff0f67-7473-4156-964b-84d78a45c265</td><td>0</td><td>1</td></tr><tr><td>الفواحة الذكية</td><td>fc6b25a8-0b24-4ce3-a164-ed09cc76e942</td><td>0</td><td>1</td></tr><tr><td>سائل غسيل ريكسو ٢ لتر لإزالة أصعب البقع من الملابس البيضاء والملونة</td><td>67a3de16-f4a6-4a63-aeb5-7409f3531923</td><td>0</td><td>0</td></tr><tr><td>معطر الملابس سليفر بوت - برائحة العود عطر منعش يدوم طويلا</td><td>11a164b2-400e-44be-8940-973d990930ba</td><td>0</td><td>1</td></tr><tr><td>طقم علب حفظ الطعام— 2 قطعة</td><td>cf0b2887-f896-4dda-981f-e5a1af3dc555</td><td>0</td><td>1</td></tr><tr><td>أكياس زبلوك – غلق محكم لتخزين آمن مقاس 4</td><td>098b956c-d1c8-405e-b258-e2f56d1630a2</td><td>0</td><td>2</td></tr><tr><td></td><td></td><td>0</td><td>0</td></tr><tr><td>ريكسو - مناشف من الألياف الدقيقة خالية من الوبر والخطوط 30 × 30 سم - 10 قطع</td><td>a3d31244-5a67-4e17-9367-ee97c639d720</td><td>0</td><td>1</td></tr><tr><td>أكياس حفظ الطعام بسحاب زيبلوك – إغلاق محكم وطازجة لفترة أطول مقاس S</td><td>453e57e4-ac9b-4f3d-81db-b31914814524</td><td>0</td><td>0</td></tr><tr><td>ممسحة ارضية ريكسو مع عصا حديد – تنظيف عملي للأرضيات بكل سهولة | REXO</td><td>187e1005-47dc-4a9d-927c-54e10b303f0a</td><td>0</td><td>1</td></tr><tr><td>مجموعة اسفنجات Super Scrubby متعددة الاستخدامات 3 قطع</td><td>a6e600a6-4d59-4ba0-929a-cd5c2beaa5cb</td><td>0</td><td>1</td></tr><tr><td>مناشف مايكروفايبر للزجاج 30×30 سم (قطعتان) – تنظيف ولمعان بدون خطوط | REXO</td><td>1de0d5f8-ca24-4654-bbd8-26b14bd144e5</td><td>0</td><td>1</td></tr><tr><td>رول نايلون تغليف ريكسو الاقتصادي 30 سم × 15 متر (3 عبوات) – تغليف عملي وحفظ مثالي للطعام | REXO</td><td>622d1997-cd6e-4605-beb8-156ff2b65d4f</td><td>0</td><td>0</td></tr><tr><td>اكياس حفظ طعام L ريكسو – غلق محكم لحفظ وتجميد الأطعمة | REXO</td><td>23873838-bf6a-4f65-aa33-d32c4d41a823</td><td>0</td><td>0</td></tr><tr><td>اكياس تبريد وحفظ ريكسو بسحاب محكم تحافظ على الطزاجة والنكهة مقاس M | REXO</td><td>7cd5f571-6a4a-4793-8e61-3d0d2d5cc687</td><td>0</td><td>0</td></tr><tr><td>ورق شواء مقاوم للالتصاق مثالي للطهي الصحي ومنع التصاق الأطعمة على الشواية</td><td>ce719be6-8fd0-4467-ac27-af4b3173a4f0</td><td>0</td><td>0</td></tr><tr><td>علب حفظ الطعام ريكسو مقاس 8 – 100 كيس لحفظ وتخزين الأطعمة | REXO</td><td>ddf003ce-b5a7-4cfc-b799-df0dd8fbb9eb</td><td>0</td><td>0</td></tr><tr><td>كوبين زجاج 12 اونص</td><td>e48c885b-82f2-409f-9ee0-b6c1a59f2f96</td><td>0</td><td>1</td></tr><tr><td>أكواب ورقية للقهوة 4 اونص - 50 كوب</td><td>047e4788-c6ee-419d-8046-f80917469e61</td><td>0</td><td>1</td></tr><tr><td>اسفنجة تنظيف سحرية لإزالة البقع وتنظيف الأسطح بسهولة | REXO</td><td>36374e68-2e27-4be3-8050-3762ebba3ec3</td><td>0</td><td>0</td></tr><tr><td>سلك ستانلس ستيل ريكسو 4 حبات – تنظيف قوي للدهون والأوساخ العنيدة | REXO</td><td>1738a9b1-396e-48ee-994d-3faacf5dec49</td><td>0</td><td>0</td></tr><tr><td>حافظات فريش لوك</td><td>fe04f6f2-2ba6-48e8-b409-4385df80adcc</td><td>0</td><td>0</td></tr><tr><td>أكياس حفظ الطعام السحرية بسحاب من ريكسو(1+1)</td><td>f7899f43-5c25-4b17-85f0-d567880884c2</td><td>0</td><td>0</td></tr><tr><td>إسفنجة تنظيف للمطبخ مقاومة للخدش– قطعتين</td><td>35395fb1-9cc7-4e16-a333-79f95ca84110</td><td>0</td><td>0</td></tr><tr><td>ممسحة قطنية ممسحة دوارة 180 درجة</td><td>6a558dab-6ca3-4198-a757-cc5f085ce193</td><td>0</td><td>0</td></tr><tr><td>مكنسة مع جاروف ريكسو الفاخرة – تنظيف عملي بتصميم أنيق | REXO</td><td>9ea03ca5-552c-4e9e-a854-48b9b8cd2daa</td><td>0</td><td>0</td></tr><tr><td>اسفنج مطبخ متعددة الاستخدام 9 قطع</td><td>c6c8d030-7346-4bc2-9feb-c967b5b8d89d</td><td>0</td><td>0</td></tr><tr><td>كرسي Bliss الأمريكي المونيوم عالي الجودة و خفيف الوزن</td><td>a4a6495e-85ad-4b54-a461-47127f5e95e1</td><td>0</td><td>0</td></tr><tr><td>عرض إسفنج وسلك ريكسو (1+1)</td><td>da56f096-97ba-4027-ae74-4ade0f4f9a9d</td><td>0</td><td>0</td></tr><tr><td>معطر الملابس سليفر بوت - برائحة نسيم المسك عطر منعش يدوم طويلا</td><td>377d009d-a150-4ee9-830d-46ffea375299</td><td>0</td><td>0</td></tr><tr><td>مناشف تنظيف مايكروفايبر – عبوة من قطعتين متعددة الاستخدام</td><td>374d2595-7bb6-41c6-b550-8384b9a1eeed</td><td>0</td><td>0</td></tr><tr><td>قماش سلكي للتنظيف الجاف والمبلل 6 قطع – إزالة فعالة للدهون والبقع | REXO</td><td>50e55ce0-0e75-4f7e-af5f-84c77c689d04</td><td>0</td><td>0</td></tr><tr><td>كريم PIKI لتلميع وحماية الأحذية الجلدية المقاوم للماء</td><td>47e31220-84cb-4985-8f05-ee61b69496ca</td><td>0</td><td>0</td></tr><tr><td>اسفنجة تنظيف صحون ريكسو 3 قطع – تنظيف أقوى ونتائج أفضل كل يوم | REXO</td><td>09276145-848f-4fcb-85bc-73301664ba94</td><td>0</td><td>0</td></tr><tr><td>مجموعة التعقيم من ريكسو</td><td>a775e90c-f136-48d0-b0c7-0e3e8d833840</td><td>0</td><td>0</td></tr><tr><td>مجموعة التنظيف الممتع للأطفال</td><td>4090917a-057b-4e70-9254-0a0d6ecb7a63</td><td>0</td><td>0</td></tr><tr><td>منفضة غبار مايكروفايبر ريكسو – لتنظيف الغبار والأتربة بسهولة وفعالية | REXO</td><td>f7156d74-7ecd-41f7-9479-e9e3edd2183e</td><td>0</td><td>0</td></tr><tr><td>اسفنجة تنظيف طبيعية بتقنية سيليسوس النعومة والقوة في منتج واحد</td><td>2c54de82-da0d-49dd-94c4-8c2a09ef4e09</td><td>0</td><td>0</td></tr><tr><td>منظف أحذية بيضاء مع فرشاة مدمجة لتنظيف وتلميع الأحذية | REXO</td><td>980a179a-b96e-4fa5-9948-d6756c1afd8f</td><td>0</td><td>0</td></tr><tr><td>فرشة أسنان أطفال سيليكون</td><td>4eb14962-a1ea-4f37-a33c-b157132e794b</td><td>0</td><td>0</td></tr><tr><td>مناشف تنظيف الشاشات من المايكروفايبر ناعمة ولطيفة على الأسطح</td><td>aa030d24-1a0a-4c09-9085-77f7a22e2319</td><td>0</td><td>0</td></tr><tr><td>عرض أكياس الحفظ والماسك (1+1)</td><td>a536d373-56d6-4ad8-9a6c-9bc89bb72a0c</td><td>0</td><td>0</td></tr><tr><td>مجموعة تنظيف الصيف</td><td>eef0c759-80d3-4add-9118-a98db9c177a7</td><td>0</td><td>0</td></tr><tr><td>شبك شواء ركس متعدد الاستخدامات لشواء أسهل</td><td>8650aefb-e585-49ca-a996-97e3230301ab</td><td>0</td><td>1</td></tr><tr><td>مجموعة المطبخ</td><td>6c6d2a0b-1ee4-4fcf-8694-7eebe70309c7</td><td>0</td><td>0</td></tr><tr><td>REXO Microfiber Dust Duster – منفضة غبار مايكروفايبر</td><td>cc0d7b55-86fc-48cc-953a-eb88a35c8a88</td><td>0</td><td>0</td></tr><tr><td>معطر دورات مياه ريكسو فراشة – انتعاش يدوم ورائحة منعشة | REXO</td><td>eeb78efb-b54e-4b83-9798-e6af50a4b56e</td><td>0</td><td>0</td></tr><tr><td>كرسي الراحة الأرضي الفاخر</td><td>b3f0c946-c182-4d02-b691-fbbbaa76b7b0</td><td>0</td><td>1</td></tr></tbody></table></div></section><section class="card"><h3>مصطلحات بحث رابحة <span class="count">9</span></h3><p class="card-sub">لغة عملائك الحقيقية — استخدمها في العناوين والكلمات المفتاحية.</p><div class="table-wrap"><table><thead><tr><th>المصطلح</th><th>الإنفاق</th><th>القيمة</th><th>ROAS</th><th>تحويلات</th></tr></thead><tbody><tr><td>ريكسو</td><td>30</td><td>861</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">28.67</span><span class="meter-track"><span class="meter-fill" style="width:4.48%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>5.0</td></tr><tr><td>rexo</td><td>23</td><td>797</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">34.11</span><span class="meter-track"><span class="meter-fill" style="width:5.33%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>6.0</td></tr><tr><td>مناديل تعليق</td><td>4</td><td>275</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">68.46</span><span class="meter-track"><span class="meter-fill" style="width:10.71%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>1.0</td></tr><tr><td>افضل مناديل للحمام</td><td>1</td><td>211</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">324.94</span><span class="meter-track"><span class="meter-fill" style="width:50.81%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>1.0</td></tr><tr><td>موقع منظفات بالجمله</td><td>5</td><td>193</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">38.43</span><span class="meter-track"><span class="meter-fill" style="width:6.01%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>1.0</td></tr><tr><td>افضل مناديل</td><td>4</td><td>163</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">37.89</span><span class="meter-track"><span class="meter-fill" style="width:5.92%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>1.0</td></tr><tr><td>ركسو</td><td>0</td><td>134</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">609.09</span><span class="meter-track"><span class="meter-fill" style="width:95.24%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>1.0</td></tr><tr><td>موقع منظفات رخيص</td><td>1</td><td>110</td><td><span class="metric" style="--sev:var(--good)"><span class="metric-num">80.71</span><span class="meter-track"><span class="meter-fill" style="width:12.62%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>1.0</td></tr><tr><td>غيم مناديل</td><td>6</td><td>5</td><td><span class="metric" style="--sev:var(--critical)"><span class="metric-num">0.90</span><span class="meter-track"><span class="meter-fill" style="width:0.14%"></span><span class="meter-tick" style="inset-inline-start:0.30%"></span></span></span></td><td>0.1</td></tr></tbody></table></div></section><section class="card"><h3>كلمات سلبية مقترحة <span class="count">253</span></h3><p class="card-sub">أنفقت بلا تحويل — إجمالي مهدور 601 ريال. أضفها كـ Negative Keywords.</p><div class="table-wrap"><table><thead><tr><th>المصطلح</th><th>الإنفاق المهدور</th><th>نقرات</th></tr></thead><tbody><tr><td>مناديل</td><td>32</td><td>7</td></tr><tr><td>ممسحة ارضية</td><td>27</td><td>12</td></tr><tr><td>مناديل معلقة</td><td>16</td><td>6</td></tr><tr><td>مناشف مايكرو فايبر</td><td>14</td><td>7</td></tr><tr><td>روبروك</td><td>11</td><td>1</td></tr><tr><td>مكنسة كهربائية</td><td>11</td><td>4</td></tr><tr><td>اكياس زباله بالجمله</td><td>10</td><td>1</td></tr><tr><td>قوفي</td><td>10</td><td>8</td></tr><tr><td>ممسحة قوفي</td><td>9</td><td>3</td></tr><tr><td>verzasca ksa</td><td>9</td><td>1</td></tr><tr><td>مناديل قوفي</td><td>9</td><td>5</td></tr><tr><td>منظفات ارضيات</td><td>8</td><td>4</td></tr><tr><td>منظفات بالجملة</td><td>7</td><td>4</td></tr><tr><td>ممسحة ارضيات</td><td>7</td><td>3</td></tr><tr><td>منظف ريكسو</td><td>6</td><td>2</td></tr><tr><td>منظفات البيت</td><td>6</td><td>2</td></tr><tr><td>منظفات بسعر الجملة</td><td>6</td><td>2</td></tr><tr><td>متجر ريكسو</td><td>6</td><td>2</td></tr><tr><td>اكياس نفايات صغيره</td><td>6</td><td>1</td></tr><tr><td>ممسحة كولين</td><td>6</td><td>1</td></tr><tr><td>ارخص مكان لبيع المنظفات</td><td>5</td><td>2</td></tr><tr><td>denx</td><td>5</td><td>3</td></tr><tr><td>لطافه</td><td>5</td><td>2</td></tr><tr><td>منظف ajax</td><td>5</td><td>1</td></tr><tr><td>فواحة قاعدة الحمام</td><td>5</td><td>2</td></tr><tr><td>صابون لوكس للصحون</td><td>5</td><td>1</td></tr><tr><td>مواد النظافة</td><td>5</td><td>1</td></tr><tr><td>معدات تنظيف المنازل</td><td>5</td><td>2</td></tr><tr><td>مايكروفايبر</td><td>4</td><td>2</td></tr><tr><td>فوطة مايكرو فايبر للسيارات</td><td>4</td><td>2</td></tr><tr><td>أفضل ممسحة أرضيات</td><td>4</td><td>1</td></tr><tr><td>مناشف مايكرو فايبر للارضيات</td><td>4</td><td>2</td></tr><tr><td>مكنسة دريمي h15 pro</td><td>4</td><td>1</td></tr><tr><td>مناديل ملمس</td><td>4</td><td>2</td></tr><tr><td>ممسحة ايقونة</td><td>4</td><td>1</td></tr><tr><td>aikanbo</td><td>4</td><td>1</td></tr><tr><td>مناشف السقاف</td><td>4</td><td>1</td></tr><tr><td>ادوات نظافة بالجملة</td><td>4</td><td>2</td></tr><tr><td>مناديل جملة الرياض</td><td>4</td><td>1</td></tr><tr><td>ممسحة فيرتك</td><td>4</td><td>1</td></tr><tr><td>عروض مناديل</td><td>4</td><td>1</td></tr><tr><td>افضل ممسحة ارضيات</td><td>3</td><td>2</td></tr><tr><td>ممسحه كهربائيه</td><td>3</td><td>1</td></tr><tr><td>متجر بوصلة كوم</td><td>3</td><td>1</td></tr><tr><td>غيم</td><td>3</td><td>2</td></tr><tr><td>مجموعة منظفات</td><td>3</td><td>1</td></tr><tr><td>جملة البلاستيك في الرياض</td><td>3</td><td>1</td></tr><tr><td>متجر ترتيب المنزل</td><td>3</td><td>2</td></tr><tr><td>مكنسة بيسيل الريشة</td><td>3</td><td>1</td></tr><tr><td>مجموعة بريف للتنظيف</td><td>3</td><td>1</td></tr><tr><td>اسعار المكنسه الكهربائيه</td><td>3</td><td>1</td></tr><tr><td>شركة تنظيف منازل بالرياض</td><td>3</td><td>2</td></tr><tr><td>مكنسة شارك</td><td>3</td><td>1</td></tr><tr><td>مناديل غيم</td><td>3</td><td>2</td></tr><tr><td>سفرة ريما</td><td>3</td><td>1</td></tr><tr><td>الوعل للمستلزمات المنزلية</td><td>3</td><td>1</td></tr><tr><td>ممسحة</td><td>3</td><td>1</td></tr><tr><td>مكنسة dsp</td><td>3</td><td>1</td></tr><tr><td>منظفات زوفلورا</td><td>3</td><td>1</td></tr><tr><td>اسعار المكنسة الكهربائية فى مصر</td><td>3</td><td>1</td></tr><tr><td>مناديل وايت جملة</td><td>3</td><td>1</td></tr><tr><td>اكياس نفايات 50 جالون</td><td>3</td><td>1</td></tr><tr><td>مواد غذائية بالجملة أون لاين</td><td>3</td><td>1</td></tr><tr><td>منظفات بالجملة الرياض</td><td>3</td><td>2</td></tr><tr><td>باقة منظفات</td><td>3</td><td>1</td></tr><tr><td>ممسحة vileda</td><td>3</td><td>1</td></tr><tr><td>ريبال ماجيك</td><td>2</td><td>1</td></tr><tr><td>معجون ذا بينك</td><td>2</td><td>1</td></tr><tr><td>ملمع الرخام</td><td>2</td><td>1</td></tr><tr><td>مناديل مون</td><td>2</td><td>2</td></tr><tr><td>تلميع الرخام الباهت</td><td>2</td><td>1</td></tr><tr><td>مزيل الصدا لايف لاينز</td><td>2</td><td>1</td></tr><tr><td>مناشف مايكرو فايبر للزجاج</td><td>2</td><td>1</td></tr><tr><td>مكانس اكسترا</td><td>2</td><td>1</td></tr><tr><td>قوفي ممسحة ارضيات</td><td>2</td><td>1</td></tr><tr><td>افضل ممسحه للارض</td><td>2</td><td>1</td></tr><tr><td>اواني منزلية جدة</td><td>2</td><td>1</td></tr><tr><td>ممسحة مناديل</td><td>2</td><td>2</td></tr><tr><td>مكنسة دريمي</td><td>2</td><td>1</td></tr><tr><td>قفازات بلاستيك للمطبخ</td><td>2</td><td>1</td></tr><tr><td>ممسحة سيراميك كهربائية</td><td>2</td><td>1</td></tr><tr><td>كراسي رحلات</td><td>2</td><td>2</td></tr><tr><td>مناشف لتنظيف الزجاج</td><td>2</td><td>1</td></tr><tr><td>ممسحة أرضية مع مناديل</td><td>2</td><td>1</td></tr><tr><td>ممسحة ارضيه</td><td>2</td><td>1</td></tr><tr><td>مناديل مون 500</td><td>2</td><td>1</td></tr><tr><td>أدوات تنظيف الأرضيات</td><td>2</td><td>1</td></tr><tr><td>ملمع الرخام الصناعي</td><td>2</td><td>1</td></tr><tr><td>فوط فايبر للمطبخ</td><td>2</td><td>1</td></tr><tr><td>ممسحة يوفي الذكية للأرضيات مع مناشف مبللة</td><td>2</td><td>1</td></tr><tr><td>أفضل شركة تنظيف منازل بالرياض</td><td>2</td><td>2</td></tr><tr><td>مناشف تنظيف الارضيات</td><td>2</td><td>1</td></tr><tr><td>منشفة مايكروفايبر</td><td>2</td><td>1</td></tr><tr><td>مكنسه ارشيا 4 في 1</td><td>2</td><td>1</td></tr><tr><td>ممسحة ريبال ماجيك</td><td>2</td><td>1</td></tr><tr><td>فلاش منظف الأرضيات</td><td>2</td><td>1</td></tr><tr><td>مواد تنظيف بالجملة</td><td>2</td><td>2</td></tr><tr><td>منظفات وبلاستيك</td><td>2</td><td>1</td></tr><tr><td>مناديل معلقه للحمام</td><td>2</td><td>1</td></tr><tr><td>ممسحة فيلدا بخاخ</td><td>2</td><td>1</td></tr><tr><td>مكنسة روبوت عبير</td><td>2</td><td>1</td></tr><tr><td>ممسحات ارضيه</td><td>2</td><td>1</td></tr><tr><td>قوفي مناديل</td><td>2</td><td>1</td></tr><tr><td>مكنسة دايسون</td><td>2</td><td>1</td></tr><tr><td>ifloor 5 steam</td><td>2</td><td>1</td></tr><tr><td>ممسحة ارضية استخدام واحد</td><td>2</td><td>1</td></tr><tr><td>ملمع رخام المطبخ</td><td>2</td><td>2</td></tr><tr><td>مكنسة كهربائية ذكية</td><td>2</td><td>1</td></tr><tr><td>شركة ركس للمنظفات</td><td>2</td><td>1</td></tr><tr><td>فوطة مايكروفايبر</td><td>2</td><td>1</td></tr><tr><td>مكنسة غسيل فرش</td><td>2</td><td>1</td></tr><tr><td>صواني تيفال</td><td>2</td><td>1</td></tr><tr><td>ممسحة بخار</td><td>2</td><td>1</td></tr><tr><td>معجون التنظيف الوردي</td><td>2</td><td>1</td></tr><tr><td>مساحة ارضيات بخاخ</td><td>2</td><td>1</td></tr><tr><td>اكياس زبايل</td><td>2</td><td>1</td></tr><tr><td>مناديل سوفت نشمي</td><td>2</td><td>1</td></tr><tr><td>مناديل ٥ طبقات</td><td>2</td><td>1</td></tr><tr><td>ممسحة ويكسانا</td><td>2</td><td>1</td></tr><tr><td>مكنسة جاف ورطب كارشر</td><td>2</td><td>1</td></tr><tr><td>ارشيا مكنسه</td><td>2</td><td>1</td></tr><tr><td>مناديل بالجمله</td><td>2</td><td>1</td></tr><tr><td>كلوركس 30 لتر</td><td>2</td><td>1</td></tr><tr><td>بكج منظفات</td><td>2</td><td>1</td></tr><tr><td>مفارش سفرة</td><td>2</td><td>1</td></tr><tr><td>مناديل لطافة</td><td>2</td><td>2</td></tr><tr><td>ادوات نظافة</td><td>2</td><td>1</td></tr><tr><td>خصومات ايكيا السعوديه</td><td>2</td><td>1</td></tr><tr><td>ورنيش تلميع الرخام</td><td>2</td><td>1</td></tr><tr><td>كرسي ارضي قابل للطي</td><td>2</td><td>2</td></tr><tr><td>مناديل التعليق</td><td>2</td><td>1</td></tr><tr><td>سلة مهملات للمطبخ</td><td>2</td><td>1</td></tr><tr><td>ممسحة ارضية دوارة</td><td>2</td><td>1</td></tr><tr><td>بلاستك</td><td>2</td><td>1</td></tr><tr><td>telescopic flat mop</td><td>2</td><td>1</td></tr><tr><td>منديل</td><td>2</td><td>1</td></tr><tr><td>منتجات تنظيف المنزل</td><td>2</td><td>1</td></tr><tr><td>مناديل توكير</td><td>2</td><td>1</td></tr><tr><td>ribal magic</td><td>2</td><td>1</td></tr><tr><td>شركة تنظيف منازل شرق الرياض</td><td>2</td><td>1</td></tr><tr><td>قفازات بلاستيك</td><td>2</td><td>1</td></tr><tr><td>نيام</td><td>2</td><td>1</td></tr><tr><td>منظفات بالجملة جدة</td><td>1</td><td>1</td></tr><tr><td>قوفى</td><td>1</td><td>1</td></tr><tr><td>ادوات منزلية قريب مني</td><td>1</td><td>2</td></tr><tr><td>بوتل</td><td>1</td><td>1</td></tr><tr><td>vileda swiffer</td><td>1</td><td>1</td></tr><tr><td>جلسة ارضية</td><td>1</td><td>1</td></tr><tr><td>مكنسه كهرباء</td><td>1</td><td>1</td></tr><tr><td>شركة تنظيف بالرياض</td><td>1</td><td>1</td></tr><tr><td>اكياس ساندوتش للاطفال</td><td>1</td><td>2</td></tr><tr><td>o cedar rinseclean</td><td>1</td><td>1</td></tr><tr><td>مناديل خمس طبقات</td><td>1</td><td>2</td></tr><tr><td>مق</td><td>1</td><td>1</td></tr><tr><td>منظف مراحيض</td><td>1</td><td>1</td></tr><tr><td>ادوات المطبخ</td><td>1</td><td>1</td></tr><tr><td>الممسحه العجيبه</td><td>1</td><td>1</td></tr><tr><td>مناديل معلقة للحمام</td><td>1</td><td>1</td></tr><tr><td>عروض المنظفات اليوم</td><td>1</td><td>1</td></tr><tr><td>وايت سوفت</td><td>1</td><td>1</td></tr><tr><td>علب حفظ الطعام بلاستيك</td><td>1</td><td>1</td></tr><tr><td>وايتس مناديل</td><td>1</td><td>1</td></tr><tr><td>مصنع مون</td><td>1</td><td>1</td></tr><tr><td>مقاعد ارضية</td><td>1</td><td>1</td></tr><tr><td>عروض قوفي</td><td>1</td><td>1</td></tr><tr><td>مناديل سحب وايت</td><td>1</td><td>1</td></tr><tr><td>اكواب ورق</td><td>1</td><td>1</td></tr><tr><td>ادوات تنظيف</td><td>1</td><td>1</td></tr><tr><td>مناديل حمام</td><td>1</td><td>1</td></tr><tr><td>مناديل تنظيف الاسطح</td><td>1</td><td>1</td></tr><tr><td>رائحة حمام</td><td>1</td><td>1</td></tr><tr><td>منظف فونيك</td><td>1</td><td>1</td></tr><tr><td>مناديل علاق</td><td>1</td><td>1</td></tr><tr><td>فرشاة مرحاض استخدام واحد</td><td>1</td><td>1</td></tr><tr><td>متجر منظفات بالجمله</td><td>1</td><td>1</td></tr><tr><td>ادوات تنظيف زجاج</td><td>1</td><td>1</td></tr><tr><td>مناديل 5 طبقات</td><td>1</td><td>1</td></tr><tr><td>rexo store</td><td>1</td><td>1</td></tr><tr><td>ممسحه بخار</td><td>1</td><td>1</td></tr><tr><td>لواحظ لتنظيف المنازل</td><td>1</td><td>1</td></tr><tr><td>ممسحة دوارة مع دلو</td><td>1</td><td>1</td></tr><tr><td>افضل مطهر ارضيات ريحته حلوه</td><td>1</td><td>1</td></tr><tr><td>منظفات بالجمله الدمام</td><td>1</td><td>1</td></tr><tr><td>مطاره</td><td>1</td><td>1</td></tr><tr><td>سجاد نزهه</td><td>1</td><td>1</td></tr><tr><td>منظفات المنزل</td><td>1</td><td>1</td></tr><tr><td>صواني المنيوم</td><td>1</td><td>1</td></tr><tr><td>جلسات أرضيه</td><td>1</td><td>1</td></tr><tr><td>سابك اكياس نفايات</td><td>1</td><td>1</td></tr><tr><td>بلاستيك بالجمله</td><td>1</td><td>1</td></tr><tr><td>مادة تلميع الرخام</td><td>1</td><td>1</td></tr><tr><td>كرسي رومانسي</td><td>1</td><td>1</td></tr><tr><td>متجر ادوات منزلية السعودية</td><td>1</td><td>1</td></tr><tr><td>البيادر</td><td>1</td><td>1</td></tr><tr><td>متجر أثاث إلكتروني رخيص</td><td>1</td><td>1</td></tr><tr><td>افضل مخدات للنوم</td><td>1</td><td>1</td></tr><tr><td>اكياس زباله</td><td>1</td><td>1</td></tr><tr><td>شامبو عبايه تايد</td><td>1</td><td>1</td></tr><tr><td>مناديل سندس</td><td>1</td><td>1</td></tr><tr><td>مكاتب تنظيف منازل</td><td>1</td><td>1</td></tr><tr><td>مساحة ارضيات</td><td>0</td><td>1</td></tr><tr><td>مناديل قوفي امازون</td><td>0</td><td>1</td></tr><tr><td>اكواب شاي ورق</td><td>0</td><td>1</td></tr><tr><td>فروع ريفي جدة</td><td>0</td><td>1</td></tr><tr><td>قوڤي</td><td>0</td><td>1</td></tr><tr><td>اكياس شوي</td><td>0</td><td>1</td></tr><tr><td>حذاء رجالي</td><td>0</td><td>1</td></tr><tr><td>متجر ريال البركة</td><td>0</td><td>2</td></tr><tr><td>شركات نظافة بالرياض</td><td>0</td><td>1</td></tr><tr><td>تنظيف منازل بالرياض</td><td>0</td><td>1</td></tr><tr><td>شركة تنظيف</td><td>0</td><td>1</td></tr><tr><td>ممسحة بلاط يدوية</td><td>0</td><td>1</td></tr><tr><td>مرتبة سرير</td><td>0</td><td>1</td></tr><tr><td>ادوات سباكة</td><td>0</td><td>1</td></tr><tr><td>سلك مواعين</td><td>0</td><td>2</td></tr><tr><td>مناديل لوما</td><td>0</td><td>1</td></tr><tr><td>تلميع الرخام</td><td>0</td><td>1</td></tr><tr><td>ممسحه</td><td>0</td><td>1</td></tr><tr><td>مق عنوان القهوة</td><td>0</td><td>1</td></tr><tr><td>اكواب ورق قهوة كبيره</td><td>0</td><td>1</td></tr><tr><td>بنش</td><td>0</td><td>1</td></tr><tr><td>الربيع مارت اون لاين</td><td>0</td><td>1</td></tr><tr><td>مناكير فروزن</td><td>0</td><td>1</td></tr><tr><td>احذية مقاسات كبيرة</td><td>0</td><td>1</td></tr><tr><td>صحن ورق</td><td>0</td><td>1</td></tr><tr><td>موقع جملة كوم</td><td>0</td><td>1</td></tr><tr><td>خدمة تنظيف المنازل</td><td>0</td><td>1</td></tr><tr><td>لباد</td><td>0</td><td>1</td></tr><tr><td>معطر حمامات</td><td>0</td><td>1</td></tr><tr><td>شركة نظافة منازل</td><td>0</td><td>1</td></tr><tr><td>المصنع مباشرة اكواب ورقية بالجملة</td><td>0</td><td>1</td></tr><tr><td>صابون العبايات</td><td>0</td><td>1</td></tr><tr><td>احذية شرقية</td><td>0</td><td>1</td></tr><tr><td>مكنسه كهرباءيه</td><td>0</td><td>1</td></tr><tr><td>مناديل بارا</td><td>0</td><td>1</td></tr><tr><td>اكواب ورقيه قهوه</td><td>0</td><td>1</td></tr><tr><td>طباعه اكواب</td><td>0</td><td>1</td></tr><tr><td>مكتب عاملات نظافه</td><td>0</td><td>1</td></tr><tr><td>ايكيا غرف نوم</td><td>0</td><td>1</td></tr><tr><td>cleaning equipment supplies</td><td>0</td><td>1</td></tr><tr><td>cleaning and hygiene supplies</td><td>0</td><td>1</td></tr><tr><td>افضل منظف للقدور</td><td>0</td><td>1</td></tr><tr><td>موقع رخيص</td><td>0</td><td>1</td></tr><tr><td>نفثالين الحمام</td><td>0</td><td>1</td></tr><tr><td>مكانس لاسلكية</td><td>0</td><td>1</td></tr><tr><td>تنظيف البيت</td><td>0</td><td>1</td></tr><tr><td>صفقه</td><td>0</td><td>1</td></tr><tr><td>اسفنيك</td><td>0</td><td>1</td></tr><tr><td>ليفة سلك ناعم</td><td>0</td><td>1</td></tr><tr><td>washroom air freshener</td><td>0</td><td>1</td></tr><tr><td>اسفنيك الحمام</td><td>0</td><td>1</td></tr><tr><td>اسفنيك الحمامات</td><td>0</td><td>1</td></tr><tr><td>اسفنيك معطر</td><td>0</td><td>1</td></tr></tbody></table></div></section><div class="warn"><b>مصدر مستقل:</b> هذي الأرقام من كشف متجرك (<code>ملف المتجر الالكتروني محدث في 25-6-2026-</code>) — 489 منتجًا بإيراد 491,244 وربح 259,766. الهامش المرجّح <b>52.9%</b> ⇐ نقطة التعادل <b>ROAS 1.89</b>، وهي المستخدمة في كل التقرير أعلاه.<br>⚠️ لم تُربط بعد بمعرّفات المنصات — الربط يتطلب تصدير المنتجات من متجرك (UUID + SKU).</div><section class="card"><h3>الهامش المتوسط — ثلاثة تعريفات <span class="count">4</span></h3><p class="card-sub">العتبات كلها مبنية على المرجّح بالإيراد. الباقي للمقارنة: تباعُد الأرقام يقيس حساسية قرارك لتعريف الهامش.</p><div class="table-wrap"><table><thead><tr><th>التعريف</th><th>الهامش</th><th>نقطة التعادل</th><th>معناه</th><th>ملاحظة</th></tr></thead><tbody><tr><td>مرجّح بالإيراد</td><td>52.9%</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">◆</span>ROAS 1.89</span></td><td>كل ريال مبيعات بوزن واحد — يعكس ربحك الفعلي</td><td>الأساس المستخدم في كل التقرير أعلاه</td></tr><tr><td>متوسط بسيط (489 منتج)</td><td>45.1%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◆</span>ROAS 2.22</span></td><td>كل منتج بوزن واحد مهما صغرت مبيعاته</td><td>يهبط بسبب 24 منتجًا خاسرًا إيرادها ضئيل</td></tr><tr><td>بسيط بلا الخاسرة (465 منتج)</td><td>54.3%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◆</span>ROAS 1.84</span></td><td>المتوسط البسيط بعد حذف المنتجات ذات الهامش السالب</td><td>يمثّل ما ستربحه لو أوقفت بيع الخاسرة</td></tr><tr><td>الوسيط</td><td>53.8%</td><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◆</span>ROAS 1.86</span></td><td>المنتج الذي يقع في المنتصف تمامًا</td><td>لا تؤثر فيه القيم الشاذة إطلاقًا</td></tr></tbody></table></div></section><section class="card"><h3>التعادل حسب شريحة الهامش <span class="count">6</span></h3><p class="card-sub">عتبة ROAS واحدة لا تصلح للجميع — كل شريحة لها نقطة تعادل مختلفة.</p><div class="table-wrap"><table><thead><tr><th>الشريحة</th><th>منتجات</th><th>الإيراد</th><th>الربح</th><th>الهامش</th><th>تعادلها</th></tr></thead><tbody><tr><td>خاسر</td><td>24</td><td>7,856</td><td>-5,104</td><td>-65%</td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>لا تعادل ممكن</span></td></tr><tr><td>0–20%</td><td>12</td><td>8,096</td><td>923</td><td>11%</td><td>8.78</td></tr><tr><td>20–35%</td><td>46</td><td>34,441</td><td>10,246</td><td>30%</td><td>3.36</td></tr><tr><td>35–50%</td><td>122</td><td>138,297</td><td>61,246</td><td>44%</td><td>2.26</td></tr><tr><td>50–65%</td><td>164</td><td>190,766</td><td>111,008</td><td>58%</td><td>1.72</td></tr><tr><td>65%+</td><td>121</td><td>111,787</td><td>81,446</td><td>73%</td><td>1.37</td></tr></tbody></table></div></section><section class="card"><h3>أعلى المنتجات ربحًا (هامش ≥ 60%) <span class="count">20</span></h3><p class="card-sub">مرشّحة للإعلان — تعادلها منخفض فتحتمل تكلفة اكتساب أعلى.</p><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>رقم الصنف</th><th>الكمية المباعة</th><th>الإيراد</th><th>الربح</th><th>الهامش</th><th>تعادلها</th></tr></thead><tbody><tr><td>عرض الألف كوب</td><td>109419</td><td>289</td><td>25,474</td><td>16,563</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>65%</span></td><td>1.54</td></tr><tr><td>كرسي جلسات - 50563 - FOLDING CHAIR</td><td>132523</td><td>354</td><td>14,938</td><td>9,407</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>63%</span></td><td>1.59</td></tr><tr><td>نيلة الفيل الفاخرة</td><td>102063</td><td>559</td><td>8,747</td><td>7,730</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>88%</span></td><td>1.13</td></tr><tr><td>مساحة ريكسو مايكروفايبر العصارة -001</td><td>101683</td><td>376</td><td>8,356</td><td>5,595</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>67%</span></td><td>1.49</td></tr><tr><td>معجون تنظيف ركسو</td><td>109230</td><td>209</td><td>4,287</td><td>3,818</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>89%</span></td><td>1.12</td></tr><tr><td>منظف الفوم للمراحيض - 3 حبات/علبة</td><td>102070</td><td>1,012</td><td>5,805</td><td>3,640</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>63%</span></td><td>1.59</td></tr><tr><td>رول قصدير المنيوم 45 سم *3 متر - 2 حبة/ربطة -AF22</td><td>145013</td><td>629</td><td>5,357</td><td>3,480</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>65%</span></td><td>1.54</td></tr><tr><td>رول نايلون ركسو 30سم*1كيلو</td><td>126111</td><td>206</td><td>4,759</td><td>3,239</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>68%</span></td><td>1.47</td></tr><tr><td>كرسي رحلات فاخر قابل لطي - 38594</td><td>13237</td><td>98</td><td>4,835</td><td>3,204</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>66%</span></td><td>1.51</td></tr><tr><td>وسادة عنق لتخفيف الالام - 79038</td><td>132531</td><td>42</td><td>5,020</td><td>3,099</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>62%</span></td><td>1.62</td></tr><tr><td>مساحة ركس مايكروفايبر  بخاخ 108</td><td>101618</td><td>87</td><td>4,430</td><td>2,801</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>63%</span></td><td>1.58</td></tr><tr><td>مجمعة إزالة الدهون</td><td>109379</td><td>68</td><td>3,181</td><td>2,693</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>85%</span></td><td>1.18</td></tr><tr><td>كرسي ارض قطني - 79036</td><td>132524</td><td>14</td><td>3,490</td><td>2,115</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>61%</span></td><td>1.65</td></tr><tr><td>مناشف مايكروفايبر  60*40 - 10 حبة</td><td>110058</td><td>131</td><td>3,473</td><td>2,115</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>61%</span></td><td>1.64</td></tr><tr><td>منشفه مايكروفايبر 6 قطع 40*40 - 72 ربطة</td><td>110035</td><td>254</td><td>2,936</td><td>1,763</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>60%</span></td><td>1.66</td></tr><tr><td>كيس غسيل وحماية الأحذية الذكي 8019</td><td>132478</td><td>99</td><td>2,070</td><td>1,587</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>77%</span></td><td>1.30</td></tr><tr><td>اكياس نايلون مقاس 8 - 50 حبة</td><td>126164</td><td>264</td><td>2,075</td><td>1,558</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>75%</span></td><td>1.33</td></tr><tr><td>مناشف مايكروفايبر  40*40 - 12 حبة</td><td>110057</td><td>83</td><td>2,191</td><td>1,508</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>69%</span></td><td>1.45</td></tr><tr><td>اقراص قطنية نقية للتجميل -ريكسو</td><td>132368</td><td>586</td><td>2,342</td><td>1,504</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>64%</span></td><td>1.56</td></tr><tr><td>نيلة مرحاض كوالتي دبل  50جرام (HS074A)</td><td>109035</td><td>747</td><td>2,060</td><td>1,483</td><td><span class="badge b-good"><span class="badge-icon" aria-hidden="true">▲</span>72%</span></td><td>1.39</td></tr></tbody></table></div></section><section class="card"><h3>منتجات تُباع بخسارة <span class="count">24</span></h3><p class="card-sub">إجمالي الخسارة -5,104 ريال. أي إنفاق إعلاني على هذي يضاعف الخسارة — استبعدها من الحملات.</p><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>رقم الصنف</th><th>التصنيف</th><th>الإيراد</th><th>التكلفة</th><th>الربح</th><th>الهامش</th></tr></thead><tbody><tr><td>منشفة مايكروفايبر مطبوع مخطط 40*40 قطعة واحدة (94013)</td><td>110067</td><td>متجر</td><td>894</td><td>1,777</td><td><span class="loss">-883</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-99%</span></td></tr><tr><td>مناشف ماكيروفايبر مبطنة 16*22 (94047)</td><td>110068</td><td>متجر</td><td>405</td><td>1,232</td><td><span class="loss">-827</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-204%</span></td></tr><tr><td>منشفة شعر مايكروفايبر  62*25 سم</td><td>110045</td><td>C</td><td>151</td><td>565</td><td><span class="loss">-414</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-273%</span></td></tr><tr><td>بخاخات بلاستيك 500 مل - حبتين (929)</td><td>105526</td><td>C</td><td>91</td><td>428</td><td><span class="loss">-337</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-370%</span></td></tr><tr><td>(94024-4) مناشف مايكروفايبر مطبوع مقاس 40*25 - أربعة قطع</td><td>110070</td><td>C</td><td>471</td><td>754</td><td><span class="loss">-284</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-60%</span></td></tr><tr><td>مناشف مايكروفايبراسفنج 17*20 - ثلاث قطع (94072)</td><td>110072</td><td>متجر</td><td>435</td><td>682</td><td><span class="loss">-247</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-57%</span></td></tr><tr><td>اسفنج ركسو مموج 3 طبقات 3 حبة/ ربطة</td><td>112075</td><td>متجر</td><td>522</td><td>749</td><td><span class="loss">-227</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-43%</span></td></tr><tr><td>ملقاط طعام شكل رقم 4</td><td>140048</td><td>متجر</td><td>270</td><td>491</td><td><span class="loss">-221</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-82%</span></td></tr><tr><td>شباشب ييزي ملون</td><td>402002</td><td>متجر</td><td>902</td><td>1,108</td><td><span class="loss">-206</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-23%</span></td></tr><tr><td>فرشة تنظيف متعددة الاستخدام - 5064482</td><td>132090</td><td>C</td><td>203</td><td>397</td><td><span class="loss">-194</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-96%</span></td></tr><tr><td>ريحة حمام كوالتي  قلب 80جرام / 104</td><td>102023</td><td>B</td><td>681</td><td>855</td><td><span class="loss">-174</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-26%</span></td></tr><tr><td>بخاخات بلاستيك 500 مل - حبتين (528A)</td><td>105485</td><td>C</td><td>35</td><td>203</td><td><span class="loss">-167</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-472%</span></td></tr><tr><td>فرشة طبخ بمقبض خشبي - 50644180</td><td>132129</td><td>متجر</td><td>21</td><td>159</td><td><span class="loss">-138</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-643%</span></td></tr><tr><td>ملقاط طعام شكل رقم 1</td><td>140045</td><td>متجر</td><td>288</td><td>420</td><td><span class="loss">-132</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-46%</span></td></tr><tr><td>مصاصات برتقالي مغلف 7*207 (OR07207)</td><td>140057</td><td>C</td><td>550</td><td>681</td><td><span class="loss">-132</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-24%</span></td></tr><tr><td>سجادة شاطئية دائرية سادة</td><td>110043</td><td>متجر</td><td>326</td><td>457</td><td><span class="loss">-131</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-40%</span></td></tr><tr><td>خطافات مناشف 3 حبات - 506444</td><td>132055</td><td>متجر</td><td>296</td><td>422</td><td><span class="loss">-126</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-43%</span></td></tr><tr><td>كفوف ركسو كبير L</td><td>127002</td><td>A</td><td>31</td><td>105</td><td><span class="loss">-74</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-239%</span></td></tr><tr><td>روائح شيت لغسيل الملابس 15 حبة - z519</td><td>102071</td><td>متجر</td><td>571</td><td>631</td><td><span class="loss">-60</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-11%</span></td></tr><tr><td>اسفنج مايكروفايبر مطبوع - قطعتين (94083)</td><td>110075</td><td>متجر</td><td>263</td><td>314</td><td><span class="loss">-51</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-20%</span></td></tr><tr><td>فرشاة تنظيف - 4483</td><td>125082</td><td>متجر</td><td>259</td><td>294</td><td><span class="loss">-35</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-14%</span></td></tr><tr><td>شوكة فواكه  علبة 12 حبة - 50644139</td><td>132114</td><td>متجر</td><td>8</td><td>32</td><td><span class="loss">-23</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-288%</span></td></tr><tr><td>كاسات 8OZ دبل ابيض</td><td>122090</td><td>B</td><td>91</td><td>110</td><td><span class="loss">-18</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-20%</span></td></tr><tr><td>حامل الصوابين - 4485</td><td>132229</td><td>متجر</td><td>91</td><td>96</td><td><span class="loss">-5</span></td><td><span class="badge b-critical"><span class="badge-icon" aria-hidden="true">✕</span>-5%</span></td></tr></tbody></table></div></section><section class="card"><h3>الأصول الإعلانية <span class="count">299</span></h3><p class="card-sub">تصنيف الأداء الذي تعطيه Google لكل نص.</p><div class="table-wrap"><table><thead><tr><th>التصنيف</th><th>نوع الحقل</th><th>النص</th></tr></thead><tbody><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>بسعر الجملة للمستهلك</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>خصومات حصرية لفترة محدودة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أفضل جودة بأقل الأسعار</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>كل احتياجات منزلك في سلة واحدة بأسعار تنافسية. استفد من عروض ريكسو الحصرية وتسوّق الآن</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>CALL_TO_ACTION_SELECTION</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>CALL_TO_ACTION_SELECTION</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>CALL_TO_ACTION_SELECTION</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>توصيل مجاني</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أدوات منزلية بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أقوى عروض على مستلزمات النظافة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>متجر ريكسو للمنظفات</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أقوى عروض أدوات النظافة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>ممسحة مايكروفايبر.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>ممسحة بخارية للأرضيات.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أدوات تنظيف المنزل.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>لا تفوتي أقوى عروض الموسم على المماسح الذكية وبكجات التنظيف المتكاملة. الكمية محدودة!</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أقوى عروض المنظفات</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>منتجات ريكسو بخصومات</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>عروض التصفية الكبرى</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>وفر 50% مع بكجات ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>بكجات حصرية للتوفير</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>بكج النظافة المتكامل</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>خصومات ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>لا تفوت خصومات الصيف</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>وفرها ببكج والشحن مجاني</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>اقوى العروض مستلزمات المنزل</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>تسوق الان بكجات ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>مبيعات التصفية بدأت! خصومات حصرية على بكجات مختارة. جودة عالية وتوصيل سريع لكل المدن.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>وفر وقتك ومالك. اختر البكج اللي يناسبك واستفيد من أقوى الخصومات على براند ريكسو الأصلي.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>ليه تدفع أكثر؟ بكجات التوفير من ريكسو تعطيك كل اللي تحتاجه لمنزلك بسعر الجملة. اطلب الآن.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>استمتع بنظافة تدوم وتوفير حقيقي مع بكجاتنا الجديدة. منظفات، مماسح، وأكثر بخصومات كبرى.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>جدد أدوات تنظيفك بأسعار الجملة مع أقوى بكجات ريكسو - اطلبها الآن وتصلك لبابك</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>جدد أدوات تنظيفك بأسعار الجملة مع أقوى بكجات ريكسو - اطلبها الآن وتصلك لبابك</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>عروض التصفية بعد رمضان بدأت - خصومات كبرى على كراسي الرحلات ومستلزمات البيت</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>لا تشتري بالحبة! خذ البكج ووفر الكثير على منظفات ريكسو وأدوات النظافة الذكية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>وفر مالك مع بكجات التوفير من متجر ريكسو - منظفات ومماسح في كرتون واحد</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>شحن مجاني للطلبات فوق 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>اكتشف في Rexo أدوات تنظيف ومطبخ عملية تساعدك على تنظيم منزلك بسهولة وبأسعار تنافسية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>تسوق من Rexo أدوات تنظيف ومطبخ بجودة عالية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>تسوق من Rexo أدوات تنظيف ومطبخ بجودة عالية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>شحن مجاني للطلبات فوق 60 ر.س</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أدوات تنظيف بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أدوات تنظيف بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أدوات تنظيف بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>مماسح ومكانس بجودة احترافية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>مماسح ومكانس ذكية تجعل التنظيف أسهل. جودة عالية بأسعار الجملة وتوصيل مجاني لطلباتك.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>بيت نظيف بأقل مجهود وتكلفة. وفر مع أسعار ريكسو المخفضة واستمتع بالشحن المجاني السريع.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>شحن مجاني لكل طلباتك فوق 60 ريال - تسوق أدوات التنظيف الأصلية بسعر الجملة من ريكسو.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>شحن مجاني فوق 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>وفر أكثر مع منتجات ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>الدفع عند الاستلام</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>تسوق تشكيلة ريكسو الجديدة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>انضم لآلاف العملاء الواثقين بمنتجات ريكسو. توصيل سريع، سعر جملة، وشحن مجاني.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>لا تدفع أكثر! احصل على أجود مستلزمات المنزل بسعر الجملة وتوصيل مجاني فوق 60 ريال.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>كل ما يحتاجه منزلك من أدوات تنظيف وحلول ذكية تجده في ريكسو. جودة أصلية وأسعار منافسة.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>مستلزمات المطبخ بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>أصلي 100% مع توصيل لجميع مناطق المملكة العربية السعودية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>منتجات أصلية 100% مع توصيل لجميع مناطق المملكة العربية السعودية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>TALL_PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أكياس حفظ وقصادير بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>متوفر الدفع عند الاستلام</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>كرتون التوفير للمطبخ من ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أكياس تخزين سميكة وبسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>عروض وقصادير رول بأقل سعر</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>لحق عروض التوفير للمطبخ</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>توفير حقيقي لبيتك بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أكياس ثلاجة سميكة برباط</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>مستلزمات المطبخ وأكياس حفظ الطعام بسعر الجملة وشحن مجاني فوق 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>أكياس حفظ عالية السماكة وقصادير رول متينة مقاومة للقطع. اطلبيها الآن بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>حافظي على تنظيم مطبخك وطعامك مع مستلزمات ريكسو الذكية. شحن مجاني للطلبات فوق 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>مستهلكات مطبخ عملية وعالية الجودة لتسهيل حياتك اليومية. متوفر الدفع عند الاستلام</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>جدد مستهلكات مطبخك بأقل سعر بالمملكة مع ميزة الدفع عند الاستلام لجميع المدن</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>مستلزمات مطبخك الأساسية من أكياس حفظ وقصادير رول سميكة بسعر الجملة وشحن مجاني فوق 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>وفر فلوسك واطلب مستهلكات المطبخ والطهي بسعر الجملة مع ميزة الدفع عند الاستلام وشحن مجاني</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>كرتون وعروض التوفير للمطبخ بسعر الجملة شحن مجاني سريع إذا لطلبات أعلى من 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>وفر فلوسك واطلب مستهلكات المطبخ والطهي بسعر الجملة. شحن مجاني سريع لطلباتك فوق 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>نظافة منزلك تبدأ مع ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>مستلزمات تنظيف المنزل من ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>قوة تنظيف لا تقاوم</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>وفر أكثر مع عروض ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>جودة عالية وأسعار جملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>الجودة الأصلية بسعر الجملة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>تنظيف أسهل مع أدوات ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أدوات احترافية لمنزل أنظف</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>تسوق أدوات التنظيف الآن</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>تسوق أدوات التنظيف الأصلية من ريكسو بسعر الجملة. جودة تضمن لك النظافة وتوفر عليك الكثير</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>عروض ريكسو مستمرة! احصل على أدوات تنظيف احترافية بجودة عالية وأسعار الجملة. اطلبها اليوم</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>متجر ريكسو وجهتك الأولى لأدوات التنظيف الموثوقة. وفر ميزانيتك وتسوق منتجات ذات جودة عالية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>أفضل أدوات التنظيف لمنزلك، جودة ممتازة وسعر جملة تنافسي. تسوق من ريكسو اليوم</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>احتياجات التنظيف في مكان واحد بسعر الجملة. جودة عالية تصلك لباب بيتك. اطلب من ريكسو الآن</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>تسوّق أدوات التنظيف من ريكسو بسعر الجملة ووفر على ميزانيتك اليوم.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>أفضل أدوات التنظيف بأسعار الجملة حصرياً على متجر ريكسو، جودة لا تقارن.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>وداعاً للأسعار المرتفعة! احصل على أدوات تنظيف احترافية بسعر الجملة.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>تجهيزات المنزل صارت أسهل وأوفر مع عروض الجملة من متجر ريكسو.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>اكتشف مجموعة أدوات التنظيف الاحترافية من ريكسو لجعل منزلك يلمع يومياً.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>AD_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>PORTRAIT_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>SQUARE_MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>عروض 1+1</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>عروض 1+1 لفترة محدودة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>كل احتياجات البيت بمكان واحد</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>عروض منزلية لفترة محدودة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>جودة موثوقة وسعر أوفر</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>عروض ريكسو</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>ريكسو خيار البيت المتكامل</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>منتجات عملية للاستخدام اليومي</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>وفّر مع البكجات التوفيرية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>تسوق الأكثر مبيعًا الآن واستفد من الأسعار التوفيرية والعروض المتاحة لفترة محدودة.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>وفّر في مشتريات المنزل اليومية مع تشكيلة ريكسو والتوصيل إلى جميع مناطق المملكة.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>تسوق أدوات التنظيف والمطبخ من ريكسو بأسعار الجملة وشحن مجاني للطلبات فوق 60 ريال</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>كل احتياجات البيت من أدوات التنظيف والمطبخ وحفظ الطعام في متجر واحد</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>منتجات عملية وجودة موثوقة بأسعار تناسب الاستخدام اليومي لكل منزل</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>اطلب أدوات التنظيف وحفظ الطعام والمنتجات الورقية بجودة موثوقة وأسعار مناسبة.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>أدوات تنظيف لكل منزل</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>كل أدوات النظافة بمكان واحد</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>منظفات ريكسو للبيت</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>مماسح ومكانس ومنظفات</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>منتجات تنظيف بجودة موثوقة</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>منظفات فعالة بأسعار أوفر</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>حلول تنظيف عملية</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>HEADLINE</td><td>نظافة تفرق من أول استخدام</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>كل ما تحتاجه لنظافة المنزل من ممسحات ومكانس وإسفنج ومنظفات في مكان واحد.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>تسوق عروض أدوات التنظيف والمنظفات واستفد من الشحن المجاني فوق 60 ريال.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>DESCRIPTION</td><td>وفّر في مشتريات النظافة اليومية واطلب منتجات ريكسو الأكثر مبيعًا الآن.</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>مماسح ومكانس وإسفنج ومنظفات عملية بأسعار مناسبة لكل احتياجات المنزل</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>اكتشف منتجات تنظيف موثوقة تساعدك على إنجاز التنظيف بسرعة وبجهد أقل</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>LONG_HEADLINE</td><td>تسوق أدوات التنظيف والمنظفات من ريكسو لنظافة أسهل ونتائج أفضل كل يوم</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>MARKETING_IMAGE</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr><tr><td><span class="badge b-neutral"><span class="badge-icon" aria-hidden="true">◔</span>— · —</span></td><td>YOUTUBE_VIDEO</td><td>(صورة / غير نصي)</td></tr></tbody></table></div></section><footer>كل المبالغ بـ SAR · نقطة التعادل محسوبة على هامش 53% · المصدر <code>analysis_output.json</code><br>تقرير للقراءة فقط — لا يعدّل أي شيء في حسابك الإعلاني.</footer></div><div id="tip" role="status"></div>
+<script>
+(function(){
+  var tip=document.getElementById('tip');
+  function show(el){
+    var t=el.getAttribute('data-tip'); if(!t) return;
+    tip.textContent=t; tip.classList.add('on');
+    var r=el.getBoundingClientRect();
+    var top=r.top-tip.offsetHeight-8;
+    tip.style.top=(top<4? r.bottom+8 : top)+'px';
+    var left=r.left+r.width/2-tip.offsetWidth/2;
+    tip.style.left=Math.max(8,Math.min(left,innerWidth-tip.offsetWidth-8))+'px';
+  }
+  function hide(){ tip.classList.remove('on'); }
+  document.querySelectorAll('[data-tip]').forEach(function(el){
+    el.addEventListener('mouseenter',function(){show(el)});
+    el.addEventListener('focus',function(){show(el)});
+    el.addEventListener('mouseleave',hide);
+    el.addEventListener('blur',hide);
+  });
+
+  // تشغيل الفيديو عند التأشير — ويعود لبدايته عند المغادرة
+  document.querySelectorAll('.media-wrap video').forEach(function(v){
+    var wrap = v.parentElement;
+    function play(){ v.play().catch(function(){}); }
+    function stop(){ v.pause(); v.currentTime = 0; }
+    wrap.addEventListener('mouseenter', play);
+    wrap.addEventListener('mouseleave', stop);
+    // للوحة المفاتيح واللمس
+    v.setAttribute('tabindex','0');
+    v.addEventListener('focus', play);
+    v.addEventListener('blur', stop);
+    v.addEventListener('click', function(){ v.paused ? play() : stop(); });
+  });
+})();
+
+/* ---------------- مساعد «اسأل التقرير» ----------------
+   يفهم بمطابقة كلمات لا بنموذج لغوي: يستخرج المقياس والنطاق
+   والتفضيل من السؤال، ويحسب من الحمولة المدمجة في الصفحة.
+   يقول «لم أفهم» بدل التخمين — رقمٌ خاطئ بثقة أسوأ من لا رقم. */
+(function(){
+  var D = window.__ASK__; if(!D) return;
+  var box = document.getElementById('askq'),
+      go  = document.getElementById('askgo'),
+      out = document.getElementById('rclog');
+  if(!box || !out) return;
+
+  function fmt(v, d){
+    if(v===null||v===undefined) return '—';
+    return Number(v).toLocaleString('en-US',
+      {minimumFractionDigits:d||0, maximumFractionDigits:d||0});
+  }
+  /* توحيد الرسم العربي: الهمزات والألف المقصورة والتاء المربوطة
+     والتشكيل — فـ«إنفاق» و«انفاق» و«أنفاق» سؤال واحد. */
+  function norm(s){
+    return (s||'').replace(/[ً-ْـ]/g,'')
+      .replace(/[أإآٱ]/g,'ا')
+      .replace(/ى/g,'ي').replace(/ة/g,'ه')
+      .replace(/[‏‎]/g,'')
+      .replace(/\s+/g,' ').trim().toLowerCase();
+  }
+  function has(q, arr){ for(var i=0;i<arr.length;i++) if(q.indexOf(norm(arr[i]))>=0) return true; return false; }
+
+  var CUR = D.cur || 'SAR';
+  var METRICS = [
+    {k:'c',  d:2, unit:CUR, lbl:'الإنفاق',  w:['انفاق','انفقت','صرف','صرفت','ميزانيه','تكلفه','كلفه','كم دفعت']},
+    {k:'v',  d:0, unit:CUR, lbl:'قيمة المبيعات', w:['مبيعات','قيمه المبيعات','ايراد','مبيعاتي','قيمه التحويلات']},
+    {k:'r',  d:2, unit:'',  lbl:'ROAS',      w:['رواس','roas','عائد الانفاق','العائد']},
+    {k:'k',  d:0, unit:'عملية', lbl:'عمليات الشراء', w:['شراء','مشتريات','تحويلات','طلبات','عمليات']},
+    {k:'i',  d:0, unit:'مرة', lbl:'الظهور',  w:['ظهور','مشاهدات','انطباعات']},
+    {k:'cl', d:0, unit:'نقرة', lbl:'النقرات', w:['نقرات','نقره','كليك']}
+  ];
+  function metricOf(q){
+    for(var i=0;i<METRICS.length;i++) if(has(q,METRICS[i].w)) return METRICS[i];
+    return null;
+  }
+  function platOf(q){
+    var map=[['snapchat',['سناب','snap']],['meta',['ميتا','meta','فيس','انستا']],
+             ['google',['جوجل','قوقل','google']],['tiktok',['تيك','tiktok']]];
+    for(var i=0;i<map.length;i++) if(has(q,map[i][1])) return map[i][0];
+    return null;
+  }
+  /* «أفضل/أسوأ» حكمٌ على الأداء، و«أعلى/أقل» حكمٌ على الحجم.
+     خلطُهما كان يجيب «أسوأ حملة» بأقلّها إنفاقًا — وهي غالبًا حملة
+     بريال واحد لا حملة خاسرة. فنفصلهما: الجودة تُقاس بالعائد،
+     والحجم بالمقياس المذكور أو بالإنفاق. */
+  var TOP  = ['اعلى','اكثر','اكبر'],
+      LOW  = ['اقل','اصغر','ادنى'],
+      BEST = ['افضل','احسن','اقوى','انجح'],
+      WORST= ['اسوا','اضعف','افشل','اردا'];
+
+  function card(title, body, note){
+    return '<div class="ask-card"><div class="ask-title">'+title+'</div>'+
+      '<div class="ask-body">'+body+'</div>'+
+      (note? '<div class="ask-note">'+note+'</div>':'')+'</div>';
+  }
+  function listRows(items, m){
+    var h='<table class="ask-tbl"><tbody>';
+    items.forEach(function(x){
+      h+='<tr><td>'+x.n+'</td><td class="n">'+fmt(x[m.k],m.d)+
+         '</td><td class="n">ROAS '+fmt(x.r,2)+'</td></tr>';
+    });
+    return h+'</tbody></table>';
+  }
+  function sum(arr,k){ var s=0; arr.forEach(function(x){s+=Number(x[k]||0);}); return s; }
+
+  function answer(raw){
+    var q = norm(raw);
+    if(!q) return card('اكتب سؤالًا','مثال: كم أنفقت على سناب؟');
+    var t = D.t, m = metricOf(q), p = platOf(q);
+    var best = has(q,BEST), worst = has(q,WORST);
+    var top = has(q,TOP) || best, low = has(q,LOW) || worst;
+
+    /* قوائم بحالة محدّدة */
+    if(has(q,['تحت التعادل','خاسره','خساره','تخسر','نازفه'])){
+      var bad = D.camps.filter(function(c){ return c.c>=50 && c.r < D.be; })
+                       .sort(function(a,b){ return b.c-a.c; });
+      if(!bad.length) return card('لا حملات تحت التعادل','كل الحملات فوق '+fmt(D.be,2)+'.');
+      return card(bad.length+' حملة تحت التعادل '+fmt(D.be,2),
+        listRows(bad.slice(0,10), METRICS[0]),
+        'إنفاقها مجتمعةً '+fmt(sum(bad,'c'),0)+' '+CUR);
+    }
+    if(has(q,['متوقفه','موقوفه','متوقف','لا تعمل'])){
+      var off = D.camps.filter(function(c){ return c.s && c.s.toUpperCase()!=='ACTIVE' && c.c>0; })
+                       .sort(function(a,b){ return b.c-a.c; });
+      return card(off.length+' حملة غير عاملة أنفقت في الفترة',
+        listRows(off.slice(0,10), METRICS[0]),
+        'أرقامها تاريخية — لا تنزف الآن.');
+    }
+    if(has(q,['تعمل','شغاله','نشطه','فعاله'])){
+      var on = D.camps.filter(function(c){ return (c.s||'').toUpperCase()==='ACTIVE'; })
+                      .sort(function(a,b){ return b.c-a.c; });
+      return card(on.length+' حملة تعمل الآن',
+        listRows(on.slice(0,10), METRICS[0]),
+        'إنفاقها '+fmt(sum(on,'c'),0)+' من '+fmt(t.cost,0)+' '+CUR);
+    }
+    if(has(q,['سله','سلات','متروك','لم يكملوا','لم يكمل','دفع'])){
+      if(t.checkouts===null||t.checkouts===undefined)
+        return card('غير متاح','المنصات المتصلة لا توفّر بيانات السلة.');
+      var left = Math.max(t.checkouts - t.conv, 0);
+      var lv = Math.max((t.checkval||0) - t.value, 0);
+      return card('لم يُكملوا الشراء: '+fmt(left,0)+' شخصًا',
+        'بدؤوا الدفع '+fmt(t.checkouts,0)+' وأتمّ '+fmt(t.conv,0)+
+        ' — الترك '+fmt(left/t.checkouts*100,0)+'%<br>'+
+        'قيمة ما لم يكتمل: <b>'+fmt(lv,0)+'</b> '+CUR+
+        (t.carts? '<br>إضافات السلة: '+fmt(t.carts,0):''),
+        'الإضافة تُسجَّل لكل منتج، والدفع لكل عملية — فالنسبة بالقيمة أدقّ.');
+    }
+    if(has(q,['وصول'])){
+      if(!t.reach) return card('غير متاح','المنصات المتصلة لا توفّر الوصول.');
+      return card('الوصول: '+fmt(t.reach,0)+' شخصًا فريدًا',
+        'متوسط التكرار '+fmt(t.impr/t.reach,1)+' مرة',
+        'مجموع حسابات المنصات — من رآك على أكثر من واحدة يُعدّ مرارًا.');
+    }
+    if(has(q,['زيارات'])) return card('زيارات المتجر: '+fmt(t.visits,0), '');
+    if(has(q,['بلا تحويل','مهدر','هدر','ضايع']))
+      return card('إنفاق بلا تحويل: '+fmt(t.wasted,0)+' '+CUR,
+        fmt(t.wasted/t.cost*100,1)+'% من إجمالي الإنفاق','منتجات ومصطلحات بحث.');
+    if(has(q,['صافي','ربح'])){
+      if(t.net===null) return card('غير متاح','لا هامش محسوب.');
+      return card('الصافي المنسوب: '+(t.net>=0?'+':'')+fmt(t.net,0)+' '+CUR,
+        'قيمة المبيعات × هامش '+fmt(D.margin*100,1)+'% − الإنفاق',
+        '⚠️ يقيس ما تنسبه المنصات لنفسها، لا مبيعات متجرك.');
+    }
+    if(has(q,['كم حمله','عدد الحملات']))
+      return card('عدد الحملات: '+fmt(D.camps.length,0),'');
+
+    /* أعلى/أقل — حملة أو يوم أو منتج أو إعلان */
+    if(top||low){
+      var pool = D.camps, what='حملة';
+      if(has(q,['يوم','ايام'])){ pool = has(q,['تاريخ'])? D.dates : D.days; what='يوم'; }
+      else if(has(q,['منتج'])){ pool = D.prods; what='منتج'; }
+      else if(has(q,['اعلان','فيديو','ابداع'])){ pool = D.ads; what='إعلان'; }
+      if(p) pool = pool.filter(function(x){ return x.p===p; });
+      /* «أفضل/أسوأ» بلا مقياس صريح ⇐ العائد. «أعلى/أقل» ⇐ الإنفاق. */
+      var mm = m || ((best||worst)? METRICS[2]
+                   : has(q,['مبيعات'])? METRICS[1] : METRICS[0]);
+      /* حدُّ إنفاق في كل الحالات — لا في العائد وحده. بدونه يتصدّر
+         «أقل حملة إنفاقًا» بحملة أنفقت صفرًا، و«أسوأ حملة» بحملة
+         بريالين وعائد 0: أرقامٌ صحيحة حسابيًّا وبلا معنى عمليًّا. */
+      var arr = pool.filter(function(x){ return x.c>=50; });
+      if(!arr.length) arr = pool.slice();
+      arr.sort(function(a,b){ return low? a[mm.k]-b[mm.k] : b[mm.k]-a[mm.k]; });
+      if(!arr.length) return card('لا نتائج','لا توجد بيانات تطابق السؤال.');
+      var w = arr[0];
+      /* لا نكرّر المقياس مرتين حين يكون هو نفسه الإنفاق أو العائد */
+      var bits = ['<b>'+fmt(w[mm.k],mm.d)+'</b> '+mm.unit+' — '+mm.lbl];
+      if(mm.k!=='r') bits.push('ROAS '+fmt(w.r,2));
+      if(mm.k!=='c') bits.push('إنفاق '+fmt(w.c,0)+' '+CUR);
+      return card(((best||worst)? (worst?'أسوأ ':'أفضل ')
+                   : (low?'أقل ':'أعلى '))+what+': '+w.n,
+        bits.join(' · '),
+        arr.length>1? 'التالي: '+arr[1].n+' ('+fmt(arr[1][mm.k],mm.d)+')' : '');
+    }
+
+    /* مقياس + منصة أو إجمالي */
+    if(m){
+      if(p){
+        var pl=null; D.plats.forEach(function(x){ if(x.id===p) pl=x; });
+        if(!pl) return card('منصة غير متصلة','لا بيانات لها في هذي الفترة.');
+        var val = m.k==='r' ? (pl.c? pl.v/pl.c : 0)
+                : m.k==='c' ? pl.c : m.k==='v' ? pl.v : m.k==='k' ? pl.k : null;
+        if(val===null) return card('غير متاح','هذا المقياس غير مفصَّل حسب المنصة.');
+        return card(m.lbl+' — '+pl.n+': '+fmt(val,m.d)+' '+m.unit,
+          'من إجمالي '+fmt(m.k==='c'?t.cost:m.k==='v'?t.value:t.conv,m.d)+
+          ' لكل المنصات');
+      }
+      var g = {c:t.cost, v:t.value, r:t.roas, k:t.conv, i:t.impr, cl:t.clicks}[m.k];
+      return card(m.lbl+': '+fmt(g,m.d)+' '+m.unit,
+        m.k==='r'? 'التعادل '+fmt(D.be,2)
+                 : 'خلال <span class="ltr">'+D.period+'</span>');
+    }
+
+    /* منصة وحدها بلا مقياس — ملخّصها */
+    if(p){
+      var pp=null; D.plats.forEach(function(x){ if(x.id===p) pp=x; });
+      if(!pp) return card('منصة غير متصلة','');
+      return card(pp.n, 'إنفاق <b>'+fmt(pp.c,0)+'</b> · مبيعات <b>'+fmt(pp.v,0)+
+        '</b> · شراء '+fmt(pp.k,0)+' · ROAS <b>'+
+        fmt(pp.c? pp.v/pp.c:0,2)+'</b>');
+    }
+
+    /* بحث باسم حملة */
+    var hit = D.camps.filter(function(c){ return norm(c.n).indexOf(q)>=0; });
+    if(!hit.length && q.length>3){
+      var words=q.split(' ').filter(function(w){return w.length>3;});
+      hit = D.camps.filter(function(c){
+        var n=norm(c.n);
+        return words.some(function(w){ return n.indexOf(w)>=0; });
+      });
+    }
+    if(hit.length===1){
+      var c=hit[0];
+      return card(c.n, 'إنفاق <b>'+fmt(c.c,0)+'</b> · مبيعات <b>'+fmt(c.v,0)+
+        '</b> · شراء '+fmt(c.k,1)+' · ROAS <b>'+fmt(c.r,2)+'</b>',
+        (c.s? 'الحالة: '+c.s : ''));
+    }
+    if(hit.length>1) return card(hit.length+' حملة تطابق البحث',
+      listRows(hit.slice(0,8), METRICS[0]));
+
+    return card('لم أفهم السؤال',
+      'أنا أقرأ أرقام هذا التقرير فقط، ولا أخمّن.',
+      'جرّب: «كم أنفقت على سناب» · «أعلى حملة إنفاقًا» · '+
+      '«الحملات تحت التعادل» · «أفضل يوم مبيعات» · «كم سلة متروكة»');
+  }
+
+  /* ---- سلوك المحادثة ---- */
+  var wrap  = document.getElementById('rexochat'),
+      panel = document.getElementById('rcpanel'),
+      launch= document.getElementById('rclaunch'),
+      close = document.getElementById('rcclose'),
+      chips = document.getElementById('rcchips');
+
+  function bubble(who, html){
+    var d = document.createElement('div');
+    d.className = 'rc-msg rc-' + who;
+    d.innerHTML = html;
+    out.appendChild(d);
+    out.scrollTop = out.scrollHeight;
+  }
+  function greet(){
+    if(out.childElementCount) return;
+    bubble('bot','<div class="ask-title">أهلًا 👋</div>'+
+      '<div class="ask-body">اسألني عن أي رقم في تقرير '+
+      '<b class="ltr">'+D.period+'</b></div>'+
+      '<div class="ask-note">أقرأ أرقام هذا التقرير فقط '+
+      '— بلا إنترنت، وفي أي نسخة محفوظة.</div>');
+  }
+  /* ---- الوضع الذكي ----
+     المفتاح يبقى في localStorage للمتصفّح ولا يُكتب في الملف أبدًا،
+     فالنسخ المؤرشفة والمُرسَلة تبقى نظيفة. والاستدعاء من المتصفّح
+     مباشرةً إلى Anthropic — بلا خادم وسيط يرى بياناتك أو مفتاحك. */
+  var KEYNAME='rexochat.key', MODNAME='rexochat.model',
+      PRVNAME='rexochat.prov';
+
+  /* مزوّدان: Gemini له طبقة مجانية، وClaude مدفوع. الاثنان يُستدعيان
+     من المتصفّح مباشرةً — بلا خادم وسيط يرى بياناتك ولا مفتاحك. */
+  var PROV = {
+    gemini: {
+      models: [['gemini-2.0-flash','Gemini 2.0 Flash — مجاني وسريع'],
+               ['gemini-2.5-flash','Gemini 2.5 Flash — أذكى'],
+               ['gemini-2.5-pro','Gemini 2.5 Pro — الأقوى']],
+      ph: 'AIza...',
+      hint: 'المفتاح مجاني من <b>aistudio.google.com/apikey</b> — '
+          + 'أنشئه بحسابك في جوجل خلال دقيقة، بلا بطاقة.',
+      warn: '⚠️ الطبقة المجانية تخضع لحدود يومية، وجوجل قد تستخدم '
+          + 'محتواها لتحسين خدماتها — فلا ترسل ما لا تريد مشاركته. '
+          + 'الطبقة المدفوعة لا تفعل ذلك.'
+    },
+    anthropic: {
+      models: [['claude-sonnet-5','Sonnet 5 — متوازن'],
+               ['claude-opus-5','Opus 5 — الأقوى'],
+               ['claude-haiku-4-5-20251001','Haiku 4.5 — الأرخص']],
+      ph: 'sk-ant-...',
+      hint: 'المفتاح من <b>console.anthropic.com</b> — يتطلّب رصيدًا مدفوعًا.',
+      warn: '⚠️ مفتاحك يعادل بطاقة دفع — لا تضعه على جهاز يشاركك فيه '
+          + 'أحد. وكل سؤال يكلّف.'
+    }
+  };
+  var esc2 = function(s){ return String(s).replace(/[<>&]/g, function(c){
+        return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c]; }); };
+  var smart=false, hist=[];
+  var bFast=document.getElementById('rcfast'),
+      bSmart=document.getElementById('rcsmart'),
+      keyBox=document.getElementById('rckey'),
+      keyIn=document.getElementById('rckeyin'),
+      modelSel=document.getElementById('rcmodel'),
+      sub=document.getElementById('rcsub');
+
+  function ls(k, d){ try{ return localStorage.getItem(k) || d; }
+                     catch(e){ return d; } }
+  function getKey(){ return ls(KEYNAME, ''); }
+  function getProv(){ var p = ls(PRVNAME, 'gemini');
+                      return PROV[p] ? p : 'gemini'; }
+  function getModel(){ return ls(MODNAME, PROV[getProv()].models[0][0]); }
+
+  var provSel = document.getElementById('rcprov'),
+      hintEl  = document.getElementById('rckeyhint'),
+      warnEl  = document.getElementById('rcwarn');
+
+  function paintProv(){
+    var p = PROV[provSel.value] || PROV.gemini;
+    keyIn.placeholder = p.ph;
+    hintEl.innerHTML  = p.hint;
+    warnEl.innerHTML  = p.warn;
+    modelSel.innerHTML = p.models.map(function(m){
+      return '<option value="'+m[0]+'">'+m[1]+'</option>'; }).join('');
+    if(provSel.value === getProv()) modelSel.value = getModel();
+  }
+
+  function setMode(on){
+    smart = on;
+    bFast.classList.toggle('on', !on);  bSmart.classList.toggle('on', on);
+    bFast.setAttribute('aria-selected', String(!on));
+    bSmart.setAttribute('aria-selected', String(on));
+    sub.textContent = on ? 'يفهم أسئلتك ويحلّل — يحتاج إنترنت'
+                         : 'يجيب من أرقام هذا التقرير';
+    keyBox.hidden = !(on && !getKey());
+    box.placeholder = on ? 'اسأل أي شيء عن أدائك…' : 'اسأل عن أي رقم…';
+  }
+
+  var SYS = 'أنت مساعد تحليل إعلانات داخل تقرير أداء لمتجر REXO. '
+    + 'أجب بالعربية، بإيجاز ووضوح، وبأرقام من البيانات المرفقة فقط.\n\n'
+    + 'قواعد ملزمة:\n'
+    + '1) لا تخترع رقمًا غير موجود في البيانات. إن لم يكن متاحًا فقل ذلك صراحةً.\n'
+    + '2) هذي الأرقام **منسوبة للمنصات** لا مبيعات المتجر — كل منصة تنسب '
+    + 'البيعة لنفسها فمجموعها فيه ازدواج. ذكّر بذلك عند أي استنتاج عن الربح.\n'
+    + '3) لا تقارن ROAS بين المنصات بلا تحفّظ — نوافذ الإسناد مختلفة.\n'
+    + '4) الوصول لا يُجمع بين المنصات؛ الشخص قد يُعدّ مرتين.\n'
+    + '5) حين تقترح إجراءً، اذكر الرقم الذي يبرّره.\n'
+    + '6) لا تستخدم Markdown معقّدًا — نصّ قصير وأسطر مفصولة.\n\n'
+    + 'نقطة التعادل ' + D.be + ' وهامش الربح '
+    + (D.margin*100).toFixed(1) + '% والفترة ' + D.period + '.\n\n'
+    + 'البيانات (JSON):\n' + JSON.stringify(D);
+
+  function oops(title, msg, note){
+    bubble('bot','<div class="ask-title">'+title+'</div>'+
+      '<div class="ask-body">'+esc2(msg)+'</div>'+
+      '<div class="ask-note">'+note+'</div>');
+  }
+
+  function askAI(q){
+    var key=getKey();
+    if(!key){ setMode(true); return; }
+    var prov=getProv(), model=getModel();
+    var think=document.createElement('div');
+    think.className='rc-msg rc-bot rc-think';
+    think.textContent='يفكّر…';
+    out.appendChild(think); out.scrollTop=out.scrollHeight;
+
+    hist.push({role:'user', content:q});
+    var req;
+    if(prov==='gemini'){
+      /* Gemini يسمّي دور المساعد model لا assistant، ويأخذ
+         التعليمات في حقل مستقلّ system_instruction. */
+      req = fetch('https://generativelanguage.googleapis.com/v1beta/models/'
+          + encodeURIComponent(model) + ':generateContent?key='
+          + encodeURIComponent(key), {
+        method:'POST', headers:{'content-type':'application/json'},
+        body:JSON.stringify({
+          system_instruction:{parts:[{text:SYS}]},
+          generationConfig:{maxOutputTokens:900, temperature:0.2},
+          contents: hist.slice(-8).map(function(m){
+            return {role: m.role==='assistant' ? 'model' : 'user',
+                    parts:[{text:m.content}]}; })
+        })
+      }).then(function(r){ return r.json().then(function(j){
+          return {ok:r.ok, err:(j.error&&j.error.message),
+            txt:(((j.candidates||[])[0]||{}).content||{}).parts
+                 ? j.candidates[0].content.parts.map(function(p){
+                     return p.text||''; }).join('') : ''}; }); });
+    } else {
+      req = fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST',
+        headers:{'content-type':'application/json','x-api-key':key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:model, max_tokens:900,
+          system:SYS, messages:hist.slice(-8)})
+      }).then(function(r){ return r.json().then(function(j){
+          return {ok:r.ok, err:(j.error&&j.error.message),
+            txt:(j.content||[]).map(function(b){
+              return b.text||''; }).join('')}; }); });
+    }
+
+    req.then(function(res){
+        think.remove();
+        if(!res.ok || !res.txt){
+          hist.pop();
+          oops('تعذّر الحصول على ردّ', res.err || 'ردّ فارغ',
+            'تحقّق من المفتاح والحدّ اليومي والاتصال. '+
+            'ويبقى الوضع ⚡ السريع يعمل بلا أيٍّ منها.');
+          return;
+        }
+        var txt=res.txt.trim();
+        hist.push({role:'assistant', content:txt});
+        bubble('bot','<div class="ask-body">'+
+          esc2(txt).replace(/\n/g,'<br>')+'</div>');
+     })
+     .catch(function(err){
+        think.remove(); hist.pop();
+        oops('تعذّر الاتصال', err.message||err,
+          'قد يكون انقطاع إنترنت. جرّب الوضع ⚡ السريع — يعمل دائمًا.');
+     });
+  }
+
+  function run(){
+    var q = box.value.trim(); if(!q) return;
+    bubble('me', esc2(q));
+    box.value = '';
+    if(chips) chips.hidden = true;
+    if(smart){ askAI(q); return; }
+    /* تأخير قصير ليُقرأ الردّ كجواب لا كوميض */
+    setTimeout(function(){ bubble('bot', answer(q)); }, 90);
+  }
+  function open(){
+    panel.hidden = false; wrap.classList.add('on');
+    launch.setAttribute('aria-expanded','true');
+    greet(); box.focus();
+  }
+  function shut(){
+    panel.hidden = true; wrap.classList.remove('on');
+    launch.setAttribute('aria-expanded','false'); launch.focus();
+  }
+
+  launch.addEventListener('click', function(){
+    panel.hidden ? open() : shut(); });
+  close.addEventListener('click', shut);
+  document.addEventListener('keydown', function(e){
+    if(e.key==='Escape' && !panel.hidden) shut(); });
+
+  go.addEventListener('click', run);
+  box.addEventListener('keydown', function(e){ if(e.key==='Enter') run(); });
+  if(chips) chips.querySelectorAll('.chip').forEach(function(b){
+    b.addEventListener('click', function(){ box.value=b.textContent; run(); });
+  });
+
+  bFast.addEventListener('click', function(){ setMode(false); });
+  bSmart.addEventListener('click', function(){ setMode(true); box.focus(); });
+  provSel.addEventListener('change', paintProv);
+  document.getElementById('rckeysave').addEventListener('click', function(){
+    var v=(keyIn.value||'').trim();
+    if(!v){ keyIn.focus(); return; }
+    try{ localStorage.setItem(KEYNAME, v);
+         localStorage.setItem(PRVNAME, provSel.value);
+         localStorage.setItem(MODNAME, modelSel.value); }catch(e){}
+    keyIn.value=''; keyBox.hidden=true;
+    bubble('bot','<div class="ask-title">✨ الوضع الذكي جاهز</div>'+
+      '<div class="ask-body">اسأل بأي صياغة — يفهم السياق ويتابع الأسئلة.'+
+      '</div><div class="ask-note">المفتاح في متصفّحك وحده، لا في الملف.'+
+      '</div>');
+    box.focus();
+  });
+  document.getElementById('rckeyskip').addEventListener('click', function(){
+    setMode(false); });
+  provSel.value = getProv();
+  paintProv();
+})();
+</script>
+</body>
+</html>
