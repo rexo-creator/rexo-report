@@ -1,0 +1,35 @@
+# ==========================================================
+#  هذا المستودع للتقارير المنشورة فقط.
+#  أي شيء عداها ممنوع — الموقع المنشور عبر GitHub Pages عام.
+# ==========================================================
+
+# أسرار — لو وصل أحدها هنا بالخطأ فهو مكشوف للإنترنت
+.env
+.env.*
+*credentials*.json
+client_secret*.json
+google-ads.yaml
+
+# بيانات التكاليف والهوامش — أخطر ما عندك، لا تصعد أبدًا
+margins.json
+store_sales.json
+*.xlsx
+*.xls
+*.csv
+
+# مخرجات خام
+analysis_output.json
+optimize_plan.json
+campaign_plan.json
+zid_data.json
+
+# ملفات العملاء (أسماء وهواتف)
+zid_exports/
+
+# بيئة ونظام
+__pycache__/
+*.py[cod]
+.venv/
+Thumbs.db
+desktop.ini
+.DS_Store
